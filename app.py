@@ -1,13 +1,21 @@
+import os
 import streamlit as st
 import pandas as pd
 import joblib
 
+# 모델 없으면 자동 학습
+if not os.path.exists("drama_rating_model.pkl"):
+    import train_model  # train_model.py가 실행되어 모델 저장
+
+# 모델 로드
+model = joblib.load("drama_rating_model.pkl")
+
+# 페이지 기본 설정
 st.set_page_config(page_title="드라마 평점 예측", layout="centered")
 st.title("🎬 배우·드라마 조합 평점 예측 대시보드")
 st.markdown("배우와 드라마 속성 조합으로 예상 평점을 예측합니다.")
 
-model = joblib.load("drama_rating_model.pkl")
-
+# 선택 옵션
 actor_list = ["김수현", "송혜교", "이병헌", "전지현", "박은빈", "조인성"]
 genre_list = ["로맨스", "스릴러", "코미디", "액션", "시대극", "판타지"]
 platform_list = ["Netflix", "tvN", "SBS", "MBC", "KBS", "ENA"]

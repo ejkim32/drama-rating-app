@@ -18,7 +18,7 @@ df = load_data()
 # ========================
 st.sidebar.title("1. 분석(EDA) 패널")
 with st.sidebar.expander("필터 및 탐색", expanded=True):
-    genre_options = st.multiselect('장르 선택', sorted(df['genre'].unique()))
+    genre_options = st.multiselect('장르 선택', sorted(df['Genres'].unique()))
     min_score = st.slider('최소 IMDB 평점', 7.0, 10.0, 8.0, 0.1)
     year_range = st.slider('방영연도 범위', int(df['year'].min()), int(df['year'].max()), (2010, 2022))
 

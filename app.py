@@ -21,6 +21,14 @@ df = load_data()
 # ========================
 # 사이드바: 필터/탐색
 # 미리 전처리: 리스트형 문자열을 실제 리스트로 변환
+
+# 안전한 literal_eval 함수
+def safe_eval(val):
+    try:
+        return ast.literal_eval(val)
+    except:
+        return []
+        
 genres = df['장르'].dropna().apply(lambda x: ast.literal_eval(x))
 genre_list = [g.strip() for sublist in genres for g in sublist]
 broadcasters = df['방송사'].dropna().apply(lambda x: ast.literal_eval(x))

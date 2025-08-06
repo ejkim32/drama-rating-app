@@ -19,7 +19,7 @@ df = load_data()
 # 사이드바: 필터/탐색
 st.sidebar.title("1. 분석(EDA) 패널")
 with st.sidebar.expander("필터 및 탐색", expanded=True):
-    genre_options = st.multiselect('장르 선택', sorted(df['genre'].unique()))
+    genre_options = st.multiselect('장르 선택', sorted(df['Genres'].unique()))
     min_score = st.slider('최소 IMDB 평점', 7.0, 10.0, 8.0, 0.1)
     year_range = st.slider('방영연도 범위', int(df['year'].min()), int(df['year'].max()), (2010, 2022))
 
@@ -29,7 +29,7 @@ filtered = df[
     (df['year'] <= year_range[1])
 ]
 if genre_options:
-    filtered = filtered[filtered['genre'].isin(genre_options)]
+    filtered = filtered[filtered['Genres'].isin(genre_options)]
 
 # =======================
 # 본문: EDA 핵심 항목 나열
@@ -53,7 +53,7 @@ st.subheader("2. 기초 통계")
 st.write("IMDB 평점 요약 통계:")
 st.write(df['imdb_rating'].describe())
 st.write("연도별 유니크값:", df['year'].nunique())
-st.write("장르별 유니크값:", df['genre'].nunique())
+st.write("장르별 유니크값:", df['Genres'].nunique())
 if 'actor' in df.columns:
     st.write("배우 유니크값:", df['actor'].nunique())
 
@@ -61,13 +61,13 @@ if 'actor' in df.columns:
 st.subheader("3. 분포 시각화")
 st.write("IMDB 평점 분포")
 st.hist(df['imdb_rating'], bins=20)
-st.bar_chart(df['genre'].value_counts())
+st.bar_chart(df['Genres'].value_counts())
 st.line_chart(df['year'].value_counts().sort_index())
 
 # 4. 교차분석
 st.subheader("4. 교차분석")
 st.write("장르별 평균 평점")
-st.dataframe(df.groupby('genre')['imdb_rating'].mean().sort_values(ascending=False))
+st.dataframe(df.groupby('Genres')['imdb_rating'].mean().sort_values(ascending=False))
 if 'org_net' in df.columns:
     st.write("방송사별 평균 평점")
     st.dataframe(df.groupby('org_net')['imdb_rating'].mean().sort_values(ascending=False))
@@ -111,7 +111,7 @@ with st.sidebar.expander("모델 및 하이퍼파라미터", expanded=True):
     rf_n_estimators = st.number_input('RF 트리 개수', 10, 500, 100, step=10) if model_type == 'Random Forest' else None
     feature_cols = st.multiselect(
         '특성(Feature) 선택',
-        ['actor_age', 'drama_pop', 'year', 'genre', 'actor', 'director'], # 실제 컬럼명에 맞게 조정
+        ['actor_age', 'drama_pop', 'year', 'Genres', 'actor', 'director'], # 실제 컬럼명에 맞게 조정
         default=['year', 'genre', 'actor_age']
     )
 

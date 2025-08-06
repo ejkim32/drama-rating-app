@@ -16,9 +16,10 @@ df = load_data()
 # ========================
 # 1. 분석(EDA) 사이드바
 # ========================
+# 사이드바: 필터/탐색
 st.sidebar.title("1. 분석(EDA) 패널")
 with st.sidebar.expander("필터 및 탐색", expanded=True):
-    genre_options = st.multiselect('장르 선택', sorted(df['Genres'].unique()))
+    genre_options = st.multiselect('장르 선택', sorted(df['genre'].unique()))
     min_score = st.slider('최소 IMDB 평점', 7.0, 10.0, 8.0, 0.1)
     year_range = st.slider('방영연도 범위', int(df['year'].min()), int(df['year'].max()), (2010, 2022))
 
@@ -29,6 +30,76 @@ filtered = df[
 ]
 if genre_options:
     filtered = filtered[filtered['genre'].isin(genre_options)]
+
+# =======================
+# 본문: EDA 핵심 항목 나열
+# =======================
+
+st.header("📊 분석(EDA) 결과 요약")
+
+# 1. 기본 데이터 정보
+st.subheader("1. 기본 데이터 정보")
+st.write(f"전체 샘플 수: {df.shape[0]}")
+st.write(f"컬럼 개수: {df.shape[1]}")
+st.write(f"주요 컬럼: {list(df.columns)}")
+st.write("결측치(Null) 비율:")
+st.write(df.isnull().mean())
+
+st.write("예시 5행:")
+st.dataframe(df.head())
+
+# 2. 기초 통계
+st.subheader("2. 기초 통계")
+st.write("IMDB 평점 요약 통계:")
+st.write(df['imdb_rating'].describe())
+st.write("연도별 유니크값:", df['year'].nunique())
+st.write("장르별 유니크값:", df['genre'].nunique())
+if 'actor' in df.columns:
+    st.write("배우 유니크값:", df['actor'].nunique())
+
+# 3. 분포 시각화
+st.subheader("3. 분포 시각화")
+st.write("IMDB 평점 분포")
+st.hist(df['imdb_rating'], bins=20)
+st.bar_chart(df['genre'].value_counts())
+st.line_chart(df['year'].value_counts().sort_index())
+
+# 4. 교차분석
+st.subheader("4. 교차분석")
+st.write("장르별 평균 평점")
+st.dataframe(df.groupby('genre')['imdb_rating'].mean().sort_values(ascending=False))
+if 'org_net' in df.columns:
+    st.write("방송사별 평균 평점")
+    st.dataframe(df.groupby('org_net')['imdb_rating'].mean().sort_values(ascending=False))
+
+# 5. 상관관계 분석 (숫자형 변수 있을 때)
+if 'actor_age' in df.columns or 'drama_pop' in df.columns:
+    st.subheader("5. 상관관계 분석")
+    st.write("상관관계 히트맵")
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    corr = df.corr(numeric_only=True)
+    fig, ax = plt.subplots()
+    sns.heatmap(corr, annot=True, cmap='coolwarm', ax=ax)
+    st.pyplot(fig)
+
+# 6. 텍스트 데이터 분석
+if 'synopsis' in df.columns:
+    st.subheader("6. 줄거리 워드클라우드")
+    wc_text = ' '.join(df['synopsis'].fillna(''))
+    wc = WordCloud(width=800, height=400, background_color='white').generate(wc_text)
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.imshow(wc, interpolation='bilinear')
+    ax.axis('off')
+    st.pyplot(fig)
+
+# 7. 실시간 필터/슬라이더/검색(사이드바에서 이미 구현)
+# (추가적으로 검색창을 본문에 더 넣을 수도 있음)
+
+# 8. 상세 데이터 보기
+st.subheader("8. 상세 데이터 미리보기")
+st.dataframe(filtered.head(10))
+
 
 # ========================
 # 2. 모델링 사이드바

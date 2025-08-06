@@ -2,19 +2,18 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score, mean_squared_error
+import ast
 
 st.set_page_config(layout="wide")
-st.title("K-드라마 EDA 대시보드 (data.csv 기준)")
+st.title("K-드라마 데이터 분석 및 예측 대시보드")
 
+# 데이터 불러오기
 @st.cache_data
 def load_data():
     return pd.read_csv('data.csv')
 df = load_data()
 
-# 미리 전처리
+# 리스트형 컬럼 안전 파싱
 def safe_eval(val):
     try: return ast.literal_eval(val)
     except: return []
@@ -25,182 +24,179 @@ broadcaster_list = [b.strip() for sublist in broadcasters for b in sublist]
 week = df['방영요일'].dropna().apply(safe_eval)
 week_list = [w.strip() for sublist in week for w in sublist]
 
-# ----- "페이지 전환" 스타일로 사이드바 radio
-page = st.sidebar.radio(
-    "분석(EDA) 패널",
-    (
-        "기본 데이터 정보",
-        "기초 통계/분포 분석",
-        "분포/교차분석",
-        "텍스트 데이터 분석 (워드클라우드)",
-        "실시간 필터/상세 미리보기"
+# =========================
+# 1. 사이드바(EDA 분석 메뉴)
+# =========================
+with st.sidebar:
+    st.title("사이드바 1: EDA 분석")
+    eda_tab = st.radio(
+        "분석 항목 선택",
+        [
+            "데이터 개요", 
+            "기초통계", 
+            "분포/교차분석", 
+            "워드클라우드", 
+            "실시간 필터", 
+            "상세 미리보기"
+        ],
+        key='eda_radio'
     )
-)
 
-if page == "기본 데이터 정보":
-    st.subheader("기본 데이터 정보")
-    st.write(f"전체 샘플 수: {df.shape[0]}")
-    st.write(f"컬럼 개수: {df.shape[1]}")
-    st.write(f"컬럼명: {list(df.columns)}")
-    st.write("결측치 비율:")
-    st.write(df.isnull().mean())
-    st.write("데이터 예시:")
-    st.dataframe(df.head())
+# =========================
+# 2. 사이드바(머신러닝 모델링)
+# =========================
+with st.sidebar:
+    st.markdown("---")
+    st.title("사이드바 2: 머신러닝 모델링")
+    with st.expander("모델/파라미터 선택", expanded=False):
+        model_type = st.selectbox('모델 선택', ['Random Forest', 'Linear Regression'])
+        test_size = st.slider('테스트셋 비율', 0.1, 0.5, 0.2, 0.05)
+        feature_cols = st.multiselect(
+            '특성(Feature) 선택',
+            ['나이', '방영년도', '성별', '장르', '배우명', '방송사', '결혼여부'],
+            default=['나이', '방영년도', '장르']
+        )
 
-elif page == "기초 통계/분포 분석":
-    st.subheader("기초 통계/분포 분석")
-    st.write(df['가중평점'].astype(float).describe())
-    st.write(f"방영년도 유니크값: {df['방영년도'].nunique()}")
-    st.write(f"장르 유니크값: {df['장르'].nunique()}")
-    st.write(f"배우 유니크값: {df['배우명'].nunique()}")
-    st.write("가중평점 히스토그램")
-    fig, ax = plt.subplots()
-    ax.hist(df['가중평점'].astype(float), bins=20, color='skyblue')
-    st.pyplot(fig)
+# =========================
+# 3. 본문 탭: EDA + ML 탭 통합
+# =========================
+tab_labels = ["데이터 개요", "기초통계", "분포/교차분석", "워드클라우드", "실시간 필터", "상세 미리보기", "머신러닝 모델링"]
+tabs = st.tabs(tab_labels)
 
-elif page == "분포/교차분석":
-    st.subheader("분포/교차분석")
-    genre_count = pd.Series(genre_list).value_counts().head(10)
-    st.write("장르별 출연 횟수 (Top 10)")
-    st.bar_chart(genre_count)
-    st.write("방영년도별 작품 수")
-    st.line_chart(df['방영년도'].value_counts().sort_index())
-    genre_mean = {}
-    for g in pd.Series(genre_list).unique():
-        genre_mean[g] = df[df['장르'].str.contains(g)]['가중평점'].astype(float).mean()
-    genre_mean_df = pd.DataFrame({'장르': genre_mean.keys(), '평균가중평점': genre_mean.values()}).sort_values('평균가중평점', ascending=False)
-    st.write("장르별 평균 가중평점(상위 10)")
-    st.dataframe(genre_mean_df.head(10))
-    broadcaster_mean = {}
-    for b in pd.Series(broadcaster_list).unique():
-        broadcaster_mean[b] = df[df['방송사'].str.contains(b)]['가중평점'].astype(float).mean()
-    broadcaster_mean_df = pd.DataFrame({'방송사': broadcaster_mean.keys(), '평균가중평점': broadcaster_mean.values()}).sort_values('평균가중평점', ascending=False)
-    st.write("방송사별 평균 가중평점")
-    st.dataframe(broadcaster_mean_df)
+# 1. 데이터 개요
+with tabs[0]:
+    if eda_tab == "데이터 개요":
+        st.header("데이터 개요")
+        st.write(f"전체 샘플 수: {df.shape[0]}")
+        st.write(f"컬럼 개수: {df.shape[1]}")
+        st.write(f"컬럼명: {list(df.columns)}")
+        st.write("결측치 비율:")
+        st.write(df.isnull().mean())
+        st.write("데이터 예시:")
+        st.dataframe(df.head())
 
-elif page == "텍스트 데이터 분석 (워드클라우드)":
-    st.subheader("텍스트 데이터 분석 (워드클라우드)")
-    # 장르 워드클라우드
-    if genre_list and ''.join(genre_list).strip():
-        genre_words = ' '.join([g for g in genre_list if g])
-        wc = WordCloud(width=800, height=400, background_color='white').generate(genre_words)
-        fig1, ax1 = plt.subplots(figsize=(10,5))
-        ax1.imshow(wc, interpolation='bilinear')
-        ax1.axis('off')
-        st.pyplot(fig1)
-    else:
-        st.info("장르 데이터가 충분하지 않아 워드클라우드를 생성할 수 없습니다.")
-
-    # 방송사 워드클라우드
-    if broadcaster_list and ''.join(broadcaster_list).strip():
-        bc_words = ' '.join([b for b in broadcaster_list if b])
-        wc2 = WordCloud(width=800, height=400, background_color='white').generate(bc_words)
-        fig2, ax2 = plt.subplots(figsize=(10,5))
-        ax2.imshow(wc2, interpolation='bilinear')
-        ax2.axis('off')
-        st.pyplot(fig2)
-    else:
-        st.info("방송사 데이터가 충분하지 않아 워드클라우드를 생성할 수 없습니다.")
-
-    # 방영요일 워드클라우드
-    if week_list and ''.join(week_list).strip():
-        week_words = ' '.join([w for w in week_list if w])
-        wc3 = WordCloud(width=800, height=400, background_color='white').generate(week_words)
-        fig3, ax3 = plt.subplots(figsize=(10,5))
-        ax3.imshow(wc3, interpolation='bilinear')
-        ax3.axis('off')
-        st.pyplot(fig3)
-    else:
-        st.info("방영요일 데이터가 충분하지 않아 워드클라우드를 생성할 수 없습니다.")
-
-elif page == "실시간 필터/상세 미리보기":
-    st.subheader("실시간 필터/상세 미리보기")
-    score_slider = st.slider("가중평점(이상)", float(df['가중평점'].min()), float(df['가중평점'].max()), 8.0, 0.1)
-    genre_select = st.multiselect("장르 필터", sorted(set(genre_list)))
-    year_select = st.slider("방영년도", int(df['방영년도'].min()), int(df['방영년도'].max()), (2010, 2022))
-    filtered = df[
-        (df['가중평점'].astype(float) >= score_slider) &
-        (df['방영년도'] >= year_select[0]) & (df['방영년도'] <= year_select[1])
-    ]
-    if genre_select:
-        filtered = filtered[filtered['장르'].apply(lambda x: any(g in x for g in genre_select))]
-    st.write("필터 적용 데이터 미리보기 (TOP 10)")
-    st.dataframe(filtered.head(10))
-
-# ========================
-# 2. 모델링 사이드바
-# ========================
-st.sidebar.title("2. 머신러닝 모델링")
-with st.sidebar.expander("모델 및 하이퍼파라미터", expanded=True):
-    model_type = st.selectbox('모델 선택', ['Random Forest', 'Linear Regression'])
-    test_size = st.slider('테스트셋 비율', 0.1, 0.5, 0.2, 0.05)
-    rf_n_estimators = st.number_input('RF 트리 개수', 10, 500, 100, step=10) if model_type == 'Random Forest' else None
- feature_cols = st.multiselect(
-    '특성(Feature) 선택',
-    ['나이', '방영년도', '장르', '배우명', '방송사', '성별', '결혼여부'], # data.csv 기준 한글 컬럼 추천
-    default=['나이', '방영년도', '장르']  # 위 옵션 중 일부만 골라서
-)
-
-# ========================
-# 메인: 분석/시각화 & ML 예측
-# ========================
-st.title("K-Drama & Actor 평점 예측 대시보드")
-
-st.header("1. 데이터 탐색 및 시각화")
-st.write(f"필터링된 샘플: {filtered.shape[0]}")
-st.dataframe(filtered[['drama_name','imdb_rating','genre','year','actor','actor_age']].head())
-
-# 장르/연도별 분포
-st.subheader("장르별 분포")
-st.bar_chart(filtered['genre'].value_counts())
-
-st.subheader("연도별 분포")
-st.line_chart(filtered['year'].value_counts().sort_index())
-
-# 줄거리 워드클라우드
-if 'synopsis' in filtered.columns:
-    st.subheader("줄거리 워드클라우드")
-    wc_text = ' '.join(filtered['synopsis'].fillna(''))
-    if st.button('워드클라우드 생성'):
-        wc = WordCloud(width=800, height=400, background_color='white').generate(wc_text)
-        fig, ax = plt.subplots(figsize=(10, 5))
-        ax.imshow(wc, interpolation='bilinear')
-        ax.axis('off')
+# 2. 기초통계
+with tabs[1]:
+    if eda_tab == "기초통계":
+        st.header("기초 통계")
+        st.write(df['가중평점'].astype(float).describe())
+        st.write(f"방영년도 유니크값: {df['방영년도'].nunique()}")
+        st.write(f"장르 유니크값: {df['장르'].nunique()}")
+        st.write(f"배우 유니크값: {df['배우명'].nunique()}")
+        st.write("가중평점 히스토그램")
+        fig, ax = plt.subplots()
+        ax.hist(df['가중평점'].astype(float), bins=20, color='skyblue')
         st.pyplot(fig)
 
-# ========================
-# 머신러닝: 평점 예측
-# ========================
-st.header("2. 머신러닝 평점 예측")
-if st.button("모델 학습 및 예측"):
-    # 간단한 데이터 전처리 (예시, 실제로는 카테고리 인코딩 등 추가 필요)
-    X = filtered[feature_cols].copy()
-    y = filtered['imdb_rating']
+# 3. 분포/교차분석
+with tabs[2]:
+    if eda_tab == "분포/교차분석":
+        st.header("분포/교차분석")
+        genre_count = pd.Series(genre_list).value_counts().head(10)
+        st.write("장르별 출연 횟수 (Top 10)")
+        st.bar_chart(genre_count)
+        st.write("방영년도별 작품 수")
+        st.line_chart(df['방영년도'].value_counts().sort_index())
+        genre_mean = {}
+        for g in pd.Series(genre_list).unique():
+            genre_mean[g] = df[df['장르'].str.contains(g)]['가중평점'].astype(float).mean()
+        genre_mean_df = pd.DataFrame({'장르': genre_mean.keys(), '평균가중평점': genre_mean.values()}).sort_values('평균가중평점', ascending=False)
+        st.write("장르별 평균 가중평점(상위 10)")
+        st.dataframe(genre_mean_df.head(10))
+        broadcaster_mean = {}
+        for b in pd.Series(broadcaster_list).unique():
+            broadcaster_mean[b] = df[df['방송사'].str.contains(b)]['가중평점'].astype(float).mean()
+        broadcaster_mean_df = pd.DataFrame({'방송사': broadcaster_mean.keys(), '평균가중평점': broadcaster_mean.values()}).sort_values('평균가중평점', ascending=False)
+        st.write("방송사별 평균 가중평점")
+        st.dataframe(broadcaster_mean_df)
 
-    # 예시: 카테고리형 특성 One-hot 인코딩
-    X = pd.get_dummies(X, columns=[col for col in X.columns if X[col].dtype == 'object'])
+# 4. 워드클라우드
+with tabs[3]:
+    if eda_tab == "워드클라우드":
+        st.header("텍스트 데이터 분석 (워드클라우드)")
+        # 장르 워드클라우드
+        if genre_list and ''.join(genre_list).strip():
+            genre_words = ' '.join([g for g in genre_list if g])
+            wc = WordCloud(width=800, height=400, background_color='white').generate(genre_words)
+            fig1, ax1 = plt.subplots(figsize=(10,5))
+            ax1.imshow(wc, interpolation='bilinear')
+            ax1.axis('off')
+            st.pyplot(fig1)
+        else:
+            st.info("장르 데이터가 충분하지 않아 워드클라우드를 생성할 수 없습니다.")
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=42
-    )
+        # 방송사 워드클라우드
+        if broadcaster_list and ''.join(broadcaster_list).strip():
+            bc_words = ' '.join([b for b in broadcaster_list if b])
+            wc2 = WordCloud(width=800, height=400, background_color='white').generate(bc_words)
+            fig2, ax2 = plt.subplots(figsize=(10,5))
+            ax2.imshow(wc2, interpolation='bilinear')
+            ax2.axis('off')
+            st.pyplot(fig2)
+        else:
+            st.info("방송사 데이터가 충분하지 않아 워드클라우드를 생성할 수 없습니다.")
 
-    if model_type == 'Random Forest':
-        model = RandomForestRegressor(n_estimators=rf_n_estimators, random_state=42)
-    else:
+        # 방영요일 워드클라우드
+        if week_list and ''.join(week_list).strip():
+            week_words = ' '.join([w for w in week_list if w])
+            wc3 = WordCloud(width=800, height=400, background_color='white').generate(week_words)
+            fig3, ax3 = plt.subplots(figsize=(10,5))
+            ax3.imshow(wc3, interpolation='bilinear')
+            ax3.axis('off')
+            st.pyplot(fig3)
+        else:
+            st.info("방영요일 데이터가 충분하지 않아 워드클라우드를 생성할 수 없습니다.")
+
+# 5. 실시간 필터
+with tabs[4]:
+    if eda_tab == "실시간 필터":
+        st.header("실시간 필터")
+        score_slider = st.slider("가중평점(이상)", float(df['가중평점'].min()), float(df['가중평점'].max()), 8.0, 0.1)
+        genre_select = st.multiselect("장르 필터", sorted(set(genre_list)))
+        year_select = st.slider("방영년도", int(df['방영년도'].min()), int(df['방영년도'].max()), (2010, 2022))
+        filtered = df[
+            (df['가중평점'].astype(float) >= score_slider) &
+            (df['방영년도'] >= year_select[0]) & (df['방영년도'] <= year_select[1])
+        ]
+        if genre_select:
+            filtered = filtered[filtered['장르'].apply(lambda x: any(g in x for g in genre_select))]
+        st.write("필터 적용 데이터 미리보기 (TOP 10)")
+        st.dataframe(filtered.head(10))
+
+# 6. 상세 미리보기
+with tabs[5]:
+    if eda_tab == "상세 미리보기":
+        st.header("상세 미리보기 (전체)")
+        st.dataframe(df)
+
+# 7. 머신러닝 모델링 (예시)
+with tabs[6]:
+    st.header("머신러닝 모델링")
+    st.info("※ 여기서는 예시로 RandomForest/LinearRegression 회귀 예측을 보여줍니다.")
+    if len(feature_cols) > 0:
+        from sklearn.model_selection import train_test_split
+        from sklearn.ensemble import RandomForestRegressor
         from sklearn.linear_model import LinearRegression
-        model = LinearRegression()
-    
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    r2 = r2_score(y_test, y_pred)
-    mse = mean_squared_error(y_test, y_pred)
-    
-    st.write(f"**R2 Score:** {r2:.3f}")
-    st.write(f"**Test MSE:** {mse:.3f}")
-    st.write("실제 vs 예측", pd.DataFrame({'실제': y_test, '예측': y_pred}).head())
+        from sklearn.metrics import r2_score, mean_squared_error
 
-# ========================
-# 데이터 다운로드
-# ========================
-st.sidebar.download_button('필터링 데이터 다운로드', filtered.to_csv(index=False), file_name='filtered_kdrama.csv')
+        # 전처리 (카테고리 변수 더미, 실전은 특성에 맞게 수정)
+        X = df[feature_cols].copy()
+        y = df['가중평점'].astype(float)
+        # 문자열/카테고리형은 pd.get_dummies로 변환
+        X = pd.get_dummies(X, columns=[c for c in X.columns if X[c].dtype == 'object'])
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+
+        if model_type == "Random Forest":
+            model = RandomForestRegressor(n_estimators=100, random_state=42)
+        else:
+            model = LinearRegression()
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        r2 = r2_score(y_test, y_pred)
+        mse = mean_squared_error(y_test, y_pred)
+        st.write(f"**R2 Score:** {r2:.3f}")
+        st.write(f"**Test MSE:** {mse:.3f}")
+        st.write("실제 vs 예측", pd.DataFrame({'실제': y_test, '예측': y_pred}).head())
+    else:
+        st.warning("머신러닝 특성을 1개 이상 선택하세요.")
 

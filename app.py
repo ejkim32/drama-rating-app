@@ -1,39 +1,109 @@
-import os
 import streamlit as st
 import pandas as pd
-import joblib
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score, mean_squared_error
 
-# 모델 없으면 자동 학습
-if not os.path.exists("drama_rating_model.pkl"):
-    import train_model  # 모델 학습 코드 실행
+# 데이터 불러오기
+@st.cache_data
+def load_data():
+    return pd.read_csv('merged_kdrama.csv')
 
-# 모델 로드
-model = joblib.load("drama_rating_model.pkl")
+df = load_data()
 
-# 페이지 기본 설정
-st.set_page_config(page_title="드라마 평점 예측", layout="centered")
-st.title("🎬 배우·드라마 조합 평점 예측 대시보드")
-st.markdown("배우와 드라마 속성 조합으로 예상 평점을 예측합니다.")
+# ========================
+# 1. 분석(EDA) 사이드바
+# ========================
+st.sidebar.title("1. 분석(EDA) 패널")
+with st.sidebar.expander("필터 및 탐색", expanded=True):
+    genre_options = st.multiselect('장르 선택', sorted(df['genre'].unique()))
+    min_score = st.slider('최소 IMDB 평점', 7.0, 10.0, 8.0, 0.1)
+    year_range = st.slider('방영연도 범위', int(df['year'].min()), int(df['year'].max()), (2010, 2022))
 
-# 선택 옵션
-actor_list = ["김수현", "송혜교", "이병헌", "전지현", "박은빈", "조인성"]
-genre_list = ["로맨스", "스릴러", "코미디", "액션", "시대극", "판타지"]
-platform_list = ["Netflix", "tvN", "SBS", "MBC", "KBS", "ENA"]
+filtered = df[
+    (df['imdb_rating'] >= min_score) &
+    (df['year'] >= year_range[0]) &
+    (df['year'] <= year_range[1])
+]
+if genre_options:
+    filtered = filtered[filtered['genre'].isin(genre_options)]
 
-actor1 = st.selectbox("주연 배우 1", actor_list)
-actor2 = st.selectbox("주연 배우 2", [a for a in actor_list if a != actor1])
-genre = st.selectbox("장르", genre_list)
-platform = st.selectbox("방송사 / OTT", platform_list)
-release_date = st.date_input("방영 예정일")
+# ========================
+# 2. 모델링 사이드바
+# ========================
+st.sidebar.title("2. 머신러닝 모델링")
+with st.sidebar.expander("모델 및 하이퍼파라미터", expanded=True):
+    model_type = st.selectbox('모델 선택', ['Random Forest', 'Linear Regression'])
+    test_size = st.slider('테스트셋 비율', 0.1, 0.5, 0.2, 0.05)
+    rf_n_estimators = st.number_input('RF 트리 개수', 10, 500, 100, step=10) if model_type == 'Random Forest' else None
+    feature_cols = st.multiselect(
+        '특성(Feature) 선택',
+        ['actor_age', 'drama_pop', 'year', 'genre', 'actor', 'director'], # 실제 컬럼명에 맞게 조정
+        default=['year', 'genre', 'actor_age']
+    )
 
-if st.button("예상 평점 계산"):
-    input_data = pd.DataFrame({
-        "actor1": [actor1],
-        "actor2": [actor2],
-        "genre": [genre],
-        "platform": [platform],
-        "release_date": [release_date]
-    })
-    rating = model.predict(input_data)[0]
-    st.metric(label="예상 평점", value=f"{rating:.2f} / 10")
-    st.success("예측이 완료되었습니다!")
+# ========================
+# 메인: 분석/시각화 & ML 예측
+# ========================
+st.title("K-Drama & Actor 평점 예측 대시보드")
+
+st.header("1. 데이터 탐색 및 시각화")
+st.write(f"필터링된 샘플: {filtered.shape[0]}")
+st.dataframe(filtered[['drama_name','imdb_rating','genre','year','actor','actor_age']].head())
+
+# 장르/연도별 분포
+st.subheader("장르별 분포")
+st.bar_chart(filtered['genre'].value_counts())
+
+st.subheader("연도별 분포")
+st.line_chart(filtered['year'].value_counts().sort_index())
+
+# 줄거리 워드클라우드
+if 'synopsis' in filtered.columns:
+    st.subheader("줄거리 워드클라우드")
+    wc_text = ' '.join(filtered['synopsis'].fillna(''))
+    if st.button('워드클라우드 생성'):
+        wc = WordCloud(width=800, height=400, background_color='white').generate(wc_text)
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.imshow(wc, interpolation='bilinear')
+        ax.axis('off')
+        st.pyplot(fig)
+
+# ========================
+# 머신러닝: 평점 예측
+# ========================
+st.header("2. 머신러닝 평점 예측")
+if st.button("모델 학습 및 예측"):
+    # 간단한 데이터 전처리 (예시, 실제로는 카테고리 인코딩 등 추가 필요)
+    X = filtered[feature_cols].copy()
+    y = filtered['imdb_rating']
+
+    # 예시: 카테고리형 특성 One-hot 인코딩
+    X = pd.get_dummies(X, columns=[col for col in X.columns if X[col].dtype == 'object'])
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=42
+    )
+
+    if model_type == 'Random Forest':
+        model = RandomForestRegressor(n_estimators=rf_n_estimators, random_state=42)
+    else:
+        from sklearn.linear_model import LinearRegression
+        model = LinearRegression()
+    
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    r2 = r2_score(y_test, y_pred)
+    mse = mean_squared_error(y_test, y_pred)
+    
+    st.write(f"**R2 Score:** {r2:.3f}")
+    st.write(f"**Test MSE:** {mse:.3f}")
+    st.write("실제 vs 예측", pd.DataFrame({'실제': y_test, '예측': y_pred}).head())
+
+# ========================
+# 데이터 다운로드
+# ========================
+st.sidebar.download_button('필터링 데이터 다운로드', filtered.to_csv(index=False), file_name='filtered_kdrama.csv')
+

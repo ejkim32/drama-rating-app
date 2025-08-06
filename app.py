@@ -135,10 +135,11 @@ with st.sidebar.expander("모델 및 하이퍼파라미터", expanded=True):
     model_type = st.selectbox('모델 선택', ['Random Forest', 'Linear Regression'])
     test_size = st.slider('테스트셋 비율', 0.1, 0.5, 0.2, 0.05)
     rf_n_estimators = st.number_input('RF 트리 개수', 10, 500, 100, step=10) if model_type == 'Random Forest' else None
-    feature_cols = st.multiselect(
-        '특성(Feature) 선택',
-        ['actor_age', 'drama_pop', 'year', 'Genres', 'actor', 'director'], # 실제 컬럼명에 맞게 조정
-        default=['year', 'genre', 'actor_age']
+ feature_cols = st.multiselect(
+    '특성(Feature) 선택',
+    ['나이', '방영년도', '장르', '배우명', '방송사', '성별', '결혼여부'], # data.csv 기준 한글 컬럼 추천
+    default=['나이', '방영년도', '장르']  # 위 옵션 중 일부만 골라서
+)
     )
 
 # ========================

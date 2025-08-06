@@ -199,4 +199,75 @@ with tabs[6]:
         st.write("실제 vs 예측", pd.DataFrame({'실제': y_test, '예측': y_pred}).head())
     else:
         st.warning("머신러닝 특성을 1개 이상 선택하세요.")
+# =========================
+# 3. 사이드바(평점 예측)
+# =========================
+with st.sidebar:
+    st.markdown("---")
+    st.title("사이드바 3: 평점 예측(입력→예상평점)")
+
+    # 예측에 사용할 입력값 UI
+    st.markdown("#### [아래 정보를 입력하면 예상 평점을 예측합니다]")
+    input_dict = {}
+    input_dict['나이'] = st.number_input("배우 나이", min_value=10, max_value=80, value=30)
+    input_dict['방영년도'] = st.number_input("방영년도", min_value=2000, max_value=2025, value=2021)
+    input_dict['성별'] = st.selectbox("배우 성별", sorted(df['성별'].dropna().unique()))
+    input_dict['장르'] = st.multiselect("장르", sorted(set(genre_list)), default=['drama'])
+    input_dict['배우명'] = st.selectbox("배우명", sorted(df['배우명'].dropna().unique()))
+    input_dict['방송사'] = st.multiselect("방송사", sorted(set(broadcaster_list)), default=['NETFLIX'])
+    input_dict['결혼여부'] = st.selectbox("결혼여부", sorted(df['결혼여부'].dropna().unique()))
+
+    # 예측 버튼
+    predict_btn = st.button("예상 평점 예측하기")
+
+# =========================
+# 본문 (간단히 탭 예시, 상세 구현은 위 코드 동일)
+# =========================
+st.write("왼쪽 사이드바 메뉴를 선택하세요.")
+
+# =========================
+# 실제 평점 예측(사이드바3) 처리
+# =========================
+if predict_btn:
+    # ===== 1. 입력값을 DataFrame 한 줄로 변환 =====
+    user_input = pd.DataFrame([{
+        '나이': input_dict['나이'],
+        '방영년도': input_dict['방영년도'],
+        '성별': input_dict['성별'],
+        '장르': str(input_dict['장르']),
+        '배우명': input_dict['배우명'],
+        '방송사': str(input_dict['방송사']),
+        '결혼여부': input_dict['결혼여부']
+    }])
+
+    # ===== 2. ML 훈련 (훈련, 특성은 사이드바2에서 선택한 값 사용) =====
+    st.info("모델을 훈련하고 예측 중입니다...")
+    from sklearn.linear_model import LinearRegression
+
+    X = df[feature_cols].copy()
+    y = df['가중평점'].astype(float)
+    # 카테고리형 처리 (모든 특성에 대해 get_dummies, 단일 특성이라도)
+    X = pd.get_dummies(X, columns=[col for col in feature_cols if X[col].dtype == 'object'])
+    user_input_proc = pd.get_dummies(user_input, columns=[col for col in feature_cols if user_input[col].dtype == 'object'])
+
+    # 컬럼 일치 맞추기(누락 특성 추가)
+    for col in X.columns:
+        if col not in user_input_proc.columns:
+            user_input_proc[col] = 0
+    user_input_proc = user_input_proc[X.columns]
+
+    # 훈련/예측
+    if model_type == 'Random Forest':
+        model = RandomForestRegressor(n_estimators=100, random_state=42)
+    else:
+        model = LinearRegression()
+    model.fit(X, y)
+    pred = model.predict(user_input_proc)[0]
+
+    st.success(f"💡 입력값 기준 예상 평점: **{pred:.2f}**")
+
+    # 입력값과 예측값도 같이 보여주기
+    st.write("입력 정보:", user_input)
+    st.write("모델 사용 특성:", feature_cols)
+
 

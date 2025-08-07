@@ -26,6 +26,9 @@ def safe_eval(val):
     except: return []
 
 def flatten_list_str(x):
+    # Series나 DataFrame, 기타 타입에 안전하게 동작
+    if isinstance(x, (pd.Series, pd.DataFrame)):
+        return x
     if pd.isnull(x):
         return ''
     if isinstance(x, list):
@@ -40,11 +43,13 @@ def flatten_list_str(x):
     return str(x)
 
 def preprocess_ml_features(X):
+    # 컬럼이 실제로 존재할 때만 flatten 적용
     for col in ['장르', '플랫폼', '방영요일']:
         if col in X.columns:
             X[col] = X[col].apply(flatten_list_str)
     X = X.fillna('')
     return X
+
 
 # =========================
 # 장르/플랫폼/요일 등 리스트 데이터 추출(워드클라우드 등)

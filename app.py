@@ -245,7 +245,7 @@ if predict_btn:
     from sklearn.linear_model import LinearRegression
 
     X = df[feature_cols].copy()
-    y = df['가중평점'].astype(float)
+    y = df['점수'].astype(float)
     # 카테고리형 처리 (모든 특성에 대해 get_dummies, 단일 특성이라도)
     X = pd.get_dummies(X, columns=[col for col in feature_cols if X[col].dtype == 'object'])
     user_input_proc = pd.get_dummies(user_input, columns=[col for col in feature_cols if user_input[col].dtype == 'object'])

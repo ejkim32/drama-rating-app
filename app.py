@@ -83,6 +83,8 @@ broadcaster_list = [b.strip() for sublist in broadcasters for b in sublist]
 weeks = df['방영요일'].apply(safe_eval)
 week_list       = [w.strip() for sublist in weeks       for w in sublist]
 
+unique_genres = set(genre_list)
+
 # =========================
 # 1. 사이드바(EDA 분석 메뉴)
 # =========================
@@ -140,7 +142,7 @@ with tabs[1]:
         st.header("기초 통계")
         st.write(df['점수'].astype(float).describe())
         st.write(f"방영년도 유니크값: {df['방영년도'].nunique()}")
-        st.write(f"장르 유니크값: {df['장르'].nunique()}")
+        st.write(f"장르 유니크값: {len(unique_genres)}")
         st.write(f"배우 유니크값: {df['배우명'].nunique()}")
         st.write("점수(평점) 히스토그램")
         fig, ax = plt.subplots()

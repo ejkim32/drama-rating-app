@@ -10,7 +10,7 @@ st.title("K-드라마 데이터 분석 및 예측 대시보드")
 # 데이터 불러오기
 @st.cache_data
 def load_data():
-    return pd.read_csv('data.csv')
+    return pd.read_json('drama_data.json')
 df = load_data()
 
 # 리스트형 컬럼 안전 파싱

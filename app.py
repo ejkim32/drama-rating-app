@@ -5,7 +5,10 @@ from wordcloud import WordCloud
 import ast
 import matplotlib
 # 한글 폰트 설정 (Windows: Malgun Gothic, macOS/Linux는 적절한 한글 폰트로)
-matplotlib.rc('font', family='Malgun Gothic')
+# 1) 사용할 한글 폰트 이름 설정
+matplotlib.rcParams['font.family'] = 'NanumGothic'
+# 2) 음수 기호가 깨지지 않도록
+matplotlib.rcParams['axes.unicode_minus'] = False
 
 # =========================
 # 0. 페이지 설정

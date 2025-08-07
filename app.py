@@ -150,80 +150,106 @@ with tabs[1]:
     st.pyplot(fig, use_container_width=True)
 
 # 4.3 분포/교차분석
+import plotly.express as px
+
 with tabs[2]:
     st.header("분포/교차분석")
 
     # 1) 드라마 점수 분포 & Top10 평점 작품
-    st.subheader("1) 드라마 점수 분포 & Top 10 평점 작품")
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-    # (a) 점수 분포
-    axes[0].hist(df['점수'].astype(float), bins=20, color='skyblue')
-    axes[0].set_title("전체 드라마 평점 분포")
-    axes[0].set_xlabel("평점")
-    axes[0].set_ylabel("빈도")
-    # (b) Top10 평점 작품
-    top10 = df.nlargest(10, '점수')[['드라마명','점수']].set_index('드라마명')
-    top10 = top10.sort_values('점수')  # 막대 차트를 위에서 아래로
-    axes[1].barh(top10.index, top10['점수'], color='salmon')
-    axes[1].set_title("Top 10 평점 작품")
-    axes[1].set_xlabel("평점")
-    # 소수점 표시
-    for y, v in enumerate(top10['점수']):
-        axes[1].text(v + 0.02, y, f"{v:.2f}", va='center')
-    st.pyplot(fig, use_container_width=True)
+    st.subheader("1) 드라마 평점 분포 & Top 10 평점 작품")
+    # (a) 분포
+    fig1 = px.histogram(
+        df, x='점수', nbins=20,
+        title='전체 드라마 평점 분포',
+        labels={'점수':'평점','count':'빈도'}
+    )
+    st.plotly_chart(fig1, use_container_width=True)
+    # (b) Top10
+    top10 = df.nlargest(10, '점수')[['드라마명','점수']].sort_values('점수')
+    top10_fig = px.bar(
+        top10, x='점수', y='드라마명', orientation='h', 
+        text=top10['점수'].map(lambda x: f"{x:.2f}"),
+        title='Top 10 평점 작품',
+        labels={'점수':'평점','드라마명':'드라마명'}
+    )
+    top10_fig.update_layout(yaxis={'categoryorder':'total ascending'})
+    st.plotly_chart(top10_fig, use_container_width=True)
 
     # 2) 연도별 플랫폼별 드라마 수
     st.subheader("2) 연도별 플랫폼별 드라마 수")
-    ct = df.explode('플랫폼').groupby(['방영년도','플랫폼']).size().unstack(fill_value=0)
-    st.line_chart(ct, use_container_width=True)
+    ct = df.explode('플랫폼').groupby(['방영년도','플랫폼']).size().reset_index(name='count')
+    fig2 = px.line(
+        ct, x='방영년도', y='count', color='플랫폼',
+        title='연도별 플랫폼별 드라마 수',
+        labels={'count':'작품 수','방영년도':'방영년도'}
+    )
+    st.plotly_chart(fig2, use_container_width=True)
 
     # 3) 멀티장르 vs 단일장르 배우 평균 평점 비교
-    st.subheader("3) 멀티장르 배우 vs 단일장르 배우 평균 평점")
+    st.subheader("3) 멀티장르 vs 단일장르 배우 평균 평점")
     actor_genre_counts = df.explode('장르').groupby('배우명')['장르'].nunique()
-    multi_idx = actor_genre_counts[actor_genre_counts > 1].index
-    df['장르구분'] = df['배우명'].apply(lambda x: '멀티장르' if x in multi_idx else '단일장르')
-    grp = df.groupby('장르구분')['점수'].mean()
-    fig, ax = plt.subplots(figsize=(6,4))
-    ax.bar(grp.index, grp.values, color=['#66c2a5','#fc8d62'])
-    ax.set_title("배우 장르구분별 평균 평점")
-    ax.set_ylabel("평균 평점")
-    for i, v in enumerate(grp.values):
-        ax.text(i, v + 0.01, f"{v:.2f}", ha='center')
-    st.pyplot(fig, use_container_width=True)
+    multi = actor_genre_counts[actor_genre_counts>1].index
+    df['장르구분'] = df['배우명'].apply(lambda x: '멀티장르' if x in multi else '단일장르')
+    grp = df.groupby('장르구분')['점수'].mean().reset_index()
+    grp['점수'] = grp['점수'].round(2)
+    fig3 = px.bar(
+        grp, x='장르구분', y='점수', text='점수',
+        title='배우 장르구분별 평균 평점',
+        labels={'점수':'평균 평점','장르구분':'배우구분'}
+    )
+    st.plotly_chart(fig3, use_container_width=True)
 
     # 4) 신인 vs 경력 배우 평균 평점 비교
     st.subheader("4) 신인(1-2개) vs 경력(3+개) 배우 평균 평점")
     actor_counts = df.groupby('배우명').size()
-    newbies = actor_counts[actor_counts <= 2].index
-    vets    = actor_counts[actor_counts >= 3].index
+    newbies = actor_counts[actor_counts<=2].index
+    vets    = actor_counts[actor_counts>=3].index
     df['경력구분'] = df['배우명'].apply(
-        lambda x: '신인(1-2개)' if x in newbies else ('경력(3+개)' if x in vets else '')
+        lambda x: '신인(1-2개)' if x in newbies else ('경력(3+개)' if x in vets else '기타')
     )
-    grp2 = df[df['경력구분']!=''].groupby('경력구분')['점수'].mean()
-    fig, ax = plt.subplots(figsize=(6,4))
-    ax.bar(grp2.index, grp2.values, color=['#8da0cb','#e78ac3'])
-    ax.set_title("경력구분별 평균 평점")
-    ax.set_ylabel("평균 평점")
-    for i, v in enumerate(grp2.values):
-        ax.text(i, v + 0.01, f"{v:.2f}", ha='center')
-    st.pyplot(fig, use_container_width=True)
+    grp2 = (
+        df[df['경력구분']!='기타']
+        .groupby('경력구분')['점수']
+        .mean()
+        .reset_index()
+    )
+    grp2['점수'] = grp2['점수'].round(2)
+    fig4 = px.bar(
+        grp2, x='경력구분', y='점수', text='점수',
+        title='경력구분별 평균 평점',
+        labels={'점수':'평균 평점','경력구분':'배우구분'}
+    )
+    st.plotly_chart(fig4, use_container_width=True)
 
-    # 5) 연도별 Top5 장르 드라마 수 변화 (라인 플롯)
+    # 5) 연도별 Top5 장르 드라마 수 변화
     st.subheader("5) 연도별 Top5 장르 드라마 수 변화")
-    top5_genres = pd.Series(genre_list).value_counts().head(5).index
-    df_top5 = df.explode('장르').query("장르 in @top5_genres")
-    ct2 = df_top5.groupby(['방영년도','장르']).size().unstack(fill_value=0)
-    st.line_chart(ct2, use_container_width=True)
+    top5 = pd.Series(genre_list).value_counts().head(5).index
+    df_top5 = df.explode('장르').query("장르 in @top5")
+    ct5 = df_top5.groupby(['방영년도','장르']).size().reset_index(name='count')
+    fig5 = px.line(
+        ct5, x='방영년도', y='count', color='장르',
+        title='연도별 Top5 장르 작품 수 변화',
+        labels={'count':'작품 수','방영년도':'방영년도'}
+    )
+    st.plotly_chart(fig5, use_container_width=True)
 
-    # 6) 배우별 평점 변동성 (표준편차 상위 10)
+    # 6) 배우별 평점 변동성(표준편차 상위 10)
     st.subheader("6) 배우별 평점 변동성 (표준편차 상위 10)")
-    actor_std = df.groupby('배우명')['점수'].std().dropna().nlargest(10)
-    fig, ax = plt.subplots(figsize=(6,4))
-    ax.bar(actor_std.index, actor_std.values, color='tan')
-    ax.set_title("평점 변동성(표준편차) 상위 10 배우")
-    ax.set_ylabel("표준편차")
-    ax.set_xticklabels(actor_std.index, rotation=45, ha='right')
-    st.pyplot(fig, use_container_width=True)
+    actor_std = (
+        df.groupby('배우명')['점수']
+        .std()
+        .dropna()
+        .nlargest(10)
+        .reset_index(name='std')
+    )
+    actor_std['std'] = actor_std['std'].round(2)
+    fig6 = px.bar(
+        actor_std, x='배우명', y='std', text='std',
+        title='평점 변동성 상위 10 배우',
+        labels={'std':'표준편차','배우명':'배우명'}
+    )
+    fig6.update_layout(xaxis_tickangle=-45)
+    st.plotly_chart(fig6, use_container_width=True)
 
 # 4.4 워드클라우드
 with tabs[3]:

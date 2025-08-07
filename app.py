@@ -252,7 +252,7 @@ with st.sidebar:
     input_dict['나이'] = st.number_input("배우 나이", min_value=10, max_value=80, value=30)
     input_dict['방영년도'] = st.number_input("방영년도", min_value=2000, max_value=2025, value=2021)
     input_dict['성별'] = st.selectbox("배우 성별", sorted(df['성별'].dropna().unique()))
-    input_dict['장르'] = st.multiselect("장르", sorted(set(genre_list)), default=['드라마'])
+    input_dict['장르'] = st.multiselect("장르", sorted(set(genre_list)), default=['드라마명'])
     input_dict['배우명'] = st.selectbox("배우명", sorted(df['배우명'].dropna().unique()))
     input_dict['플랫폼'] = st.multiselect("플랫폼", sorted(set(broadcaster_list)), default=['NETFLIX'])
     input_dict['결혼여부'] = st.selectbox("결혼여부", sorted(df['결혼여부'].dropna().unique()))

@@ -7,7 +7,9 @@ import ast
 st.set_page_config(layout="wide")
 st.title("K-드라마 데이터 분석 및 예측 대시보드")
 
-# 데이터 불러오기 (json → DataFrame)
+# =========================
+# 0. 데이터 불러오기 (json → DataFrame)
+# =========================
 @st.cache_data
 def load_data():
     raw = pd.read_json('drama_data.json')
@@ -16,12 +18,37 @@ def load_data():
 
 df = load_data()
 
-# 리스트형 컬럼 안전 파싱 함수
+# =========================
+# 리스트/멀티형 컬럼 파싱 및 flatten 함수
+# =========================
 def safe_eval(val):
     try: return ast.literal_eval(val)
     except: return []
 
-# 장르/플랫폼/요일 등 리스트 데이터 추출
+def flatten_list_str(x):
+    if pd.isnull(x):
+        return ''
+    if isinstance(x, list):
+        return ','.join([str(i).strip() for i in x])
+    if isinstance(x, str):
+        try:
+            obj = ast.literal_eval(x)
+            if isinstance(obj, list):
+                return ','.join([str(i).strip() for i in obj])
+        except:
+            return x
+    return str(x)
+
+def preprocess_ml_features(X):
+    for col in ['장르', '플랫폼', '방영요일']:
+        if col in X.columns:
+            X[col] = X[col].apply(flatten_list_str)
+    X = X.fillna('')
+    return X
+
+# =========================
+# 장르/플랫폼/요일 등 리스트 데이터 추출(워드클라우드 등)
+# =========================
 genres = df['장르'].dropna().apply(safe_eval)
 genre_list = [g.strip() for sublist in genres for g in sublist]
 broadcasters = df['플랫폼'].dropna().apply(safe_eval)
@@ -186,6 +213,7 @@ with tabs[6]:
 
         X = df[feature_cols].copy()
         y = df['점수'].astype(float)
+        X = preprocess_ml_features(X)
         X = pd.get_dummies(X, columns=[c for c in X.columns if X[c].dtype == 'object'])
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
 
@@ -210,7 +238,6 @@ with st.sidebar:
     st.markdown("---")
     st.title("사이드바 3: 평점 예측(입력→예상평점)")
 
-    # 예측에 사용할 입력값 UI
     st.markdown("#### [아래 정보를 입력하면 예상 평점을 예측합니다]")
     input_dict = {}
     input_dict['나이'] = st.number_input("배우 나이", min_value=10, max_value=80, value=30)
@@ -221,7 +248,6 @@ with st.sidebar:
     input_dict['플랫폼'] = st.multiselect("플랫폼", sorted(set(broadcaster_list)), default=['NETFLIX'])
     input_dict['결혼여부'] = st.selectbox("결혼여부", sorted(df['결혼여부'].dropna().unique()))
 
-    # 예측 버튼
     predict_btn = st.button("예상 평점 예측하기")
 
 st.write("왼쪽 사이드바 메뉴를 선택하세요.")
@@ -234,47 +260,38 @@ if predict_btn:
         '나이': input_dict['나이'],
         '방영년도': input_dict['방영년도'],
         '성별': input_dict['성별'],
-        '장르': str(input_dict['장르']),
+        '장르': input_dict['장르'],
         '배우명': input_dict['배우명'],
-        '플랫폼': str(input_dict['플랫폼']),
+        '플랫폼': input_dict['플랫폼'],
         '결혼여부': input_dict['결혼여부']
     }])
 
-    st.info("모델을 훈련하고 예측 중입니다...")
     from sklearn.linear_model import LinearRegression
     from sklearn.ensemble import RandomForestRegressor
-def flatten_list_str(x):
-    # 안전하게 리스트 문자열 → 쉼표구분 단일 문자열 변환
-    try:
-        items = ast.literal_eval(x)
-        if isinstance(items, list):
-            return ','.join([str(i).strip() for i in items])
-        else:
-            return str(items)
-    except:
-        return str(x) if pd.notnull(x) else ''
-# '장르', '플랫폼' 등 리스트형 컬럼 flatten 처리 (존재할 경우만)
-for col in ['장르', '플랫폼', '방영요일']:
-    if col in X.columns:
-        X[col] = X[col].astype(str).apply(flatten_list_str)
-    X = X.fillna('')
+
+    # 1. 훈련 데이터 전처리
     X = df[feature_cols].copy()
     y = df['점수'].astype(float)
+    X = preprocess_ml_features(X)
     X = pd.get_dummies(X, columns=[col for col in feature_cols if X[col].dtype == 'object'])
-    user_input_proc = pd.get_dummies(user_input, columns=[col for col in feature_cols if user_input[col].dtype == 'object'])
 
-    # 누락된 특성 채우기
+    # 2. 입력 데이터 전처리
+    user_input = preprocess_ml_features(user_input)
+    user_input = pd.get_dummies(user_input, columns=[col for col in feature_cols if user_input[col].dtype == 'object'])
+
+    # 3. 누락된 컬럼 채우기
     for col in X.columns:
-        if col not in user_input_proc.columns:
-            user_input_proc[col] = 0
-    user_input_proc = user_input_proc[X.columns]
+        if col not in user_input.columns:
+            user_input[col] = 0
+    user_input = user_input[X.columns]
 
+    # 4. 예측
     if model_type == 'Random Forest':
         model = RandomForestRegressor(n_estimators=100, random_state=42)
     else:
         model = LinearRegression()
     model.fit(X, y)
-    pred = model.predict(user_input_proc)[0]
+    pred = model.predict(user_input)[0]
 
     st.success(f"💡 입력값 기준 예상 평점: **{pred:.2f}**")
     st.write("입력 정보:", user_input)

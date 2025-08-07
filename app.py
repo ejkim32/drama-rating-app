@@ -254,7 +254,7 @@ with st.sidebar:
     input_dict['성별'] = st.selectbox("배우 성별", sorted(df['성별'].dropna().unique()))
     input_dict['장르'] = st.multiselect("장르", sorted(set(genre_list)))
     input_dict['배우명'] = st.selectbox("배우명", sorted(df['배우명'].dropna().unique()))
-    input_dict['플랫폼'] = st.multiselect("플랫폼", sorted(set(broadcaster_list)), default=['NETFLIX'])
+    input_dict['플랫폼'] = st.multiselect("플랫폼", sorted(set(broadcaster_list)))
     input_dict['결혼여부'] = st.selectbox("결혼여부", sorted(df['결혼여부'].dropna().unique()))
 
     predict_btn = st.button("예상 평점 예측하기")

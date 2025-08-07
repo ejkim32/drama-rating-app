@@ -22,8 +22,24 @@ df = load_data()
 # 리스트/멀티형 컬럼 파싱 및 flatten 함수
 # =========================
 def safe_eval(val):
-    try: return ast.literal_eval(val)
-    except: return []
+    # 이미 list 타입이면 그대로
+    if isinstance(val, list):
+        return val
+    # 결측치(NaN)인 경우
+    if pd.isna(val):
+        return []
+    # 문자열인 경우만 literal_eval 시도
+    if isinstance(val, str):
+        try:
+            parsed = ast.literal_eval(val)
+            if isinstance(parsed, list):
+                return parsed
+        except:
+            # "['드라마', '로맨스']" 가 아닌 일반 문자열일 때
+            return []
+    # 그 외 타입 (숫자 등) 은 무시
+    return []
+
 
 def flatten_list_str(x):
     # 리스트면 콤마로 연결
@@ -58,12 +74,14 @@ def preprocess_ml_features(X):
 # =========================
 # 장르/플랫폼/요일 등 리스트 데이터 추출(워드클라우드 등)
 # =========================
-genres = df['장르'].dropna().apply(safe_eval)
-genre_list = [g.strip() for sublist in genres for g in sublist]
-broadcasters = df['플랫폼'].dropna().apply(safe_eval)
+genres = df['장르'].apply(safe_eval)
+genre_list      = [g.strip() for sublist in genres      for g in sublist]
+
+broadcasters = df['플랫폼'].apply(safe_eval)
 broadcaster_list = [b.strip() for sublist in broadcasters for b in sublist]
-week = df['방영요일'].dropna().apply(safe_eval)
-week_list = [w.strip() for sublist in week for w in sublist]
+
+weeks = df['방영요일'].apply(safe_eval)
+week_list       = [w.strip() for sublist in weeks       for w in sublist]
 
 # =========================
 # 1. 사이드바(EDA 분석 메뉴)

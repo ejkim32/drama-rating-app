@@ -105,7 +105,7 @@ with tabs[2]:
         st.dataframe(genre_mean_df.head(10))
         broadcaster_mean = {}
         for b in pd.Series(broadcaster_list).unique():
-            broadcaster_mean[b] = df[df['방송사'].str.contains(b)]['가중평점'].astype(float).mean()
+            broadcaster_mean[b] = df[df['방송사'].str.contains(b)]['점수'].astype(float).mean()
         broadcaster_mean_df = pd.DataFrame({'방송사': broadcaster_mean.keys(), '평균가중평점': broadcaster_mean.values()}).sort_values('평균가중평점', ascending=False)
         st.write("방송사별 평균 가중평점")
         st.dataframe(broadcaster_mean_df)

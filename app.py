@@ -26,13 +26,10 @@ def safe_eval(val):
     except: return []
 
 def flatten_list_str(x):
-    # Series나 DataFrame, 기타 타입에 안전하게 동작
-    if isinstance(x, (pd.Series, pd.DataFrame)):
-        return x
-    if pd.isnull(x):
-        return ''
+    # 리스트면 콤마로 연결
     if isinstance(x, list):
         return ','.join([str(i).strip() for i in x])
+    # 문자열인 경우 리스트형 문자열 처리
     if isinstance(x, str):
         try:
             obj = ast.literal_eval(x)
@@ -40,6 +37,13 @@ def flatten_list_str(x):
                 return ','.join([str(i).strip() for i in obj])
         except:
             return x
+        return x
+    # 결측치 확인 (리스트/문자열 아닌 경우에만)
+    try:
+        if pd.isnull(x):
+            return ''
+    except Exception:
+        pass
     return str(x)
 
 def preprocess_ml_features(X):

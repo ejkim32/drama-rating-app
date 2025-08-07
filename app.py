@@ -19,7 +19,7 @@ def safe_eval(val):
     except: return []
 genres = df['장르'].dropna().apply(safe_eval)
 genre_list = [g.strip() for sublist in genres for g in sublist]
-broadcasters = df['방송사'].dropna().apply(safe_eval)
+broadcasters = df['플랫폼'].dropna().apply(safe_eval)
 broadcaster_list = [b.strip() for sublist in broadcasters for b in sublist]
 week = df['방영요일'].dropna().apply(safe_eval)
 week_list = [w.strip() for sublist in week for w in sublist]

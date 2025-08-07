@@ -3,6 +3,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 import ast
+import matplotlib
+# 한글 폰트 설정 (Windows: Malgun Gothic, macOS/Linux는 적절한 한글 폰트로)
+matplotlib.rc('font', family='Malgun Gothic')
 
 # =========================
 # 0. 페이지 설정
@@ -144,65 +147,80 @@ with tabs[1]:
     st.pyplot(fig, use_container_width=True)
 
 # 4.3 분포/교차분석
-# 4.3 분포/교차분석
 with tabs[2]:
     st.header("분포/교차분석")
 
-    # 1) 드라마 점수 분포 & 상위 평점 작품 Top10
+    # 1) 드라마 점수 분포 & Top10 평점 작품
     st.subheader("1) 드라마 점수 분포 & Top 10 평점 작품")
-    fig, ax = plt.subplots(1, 2, figsize=(12, 4))
-    # 점수 분포 히스토그램
-    ax[0].hist(df['점수'].astype(float), bins=20)
-    ax[0].set_title("전체 점수 분포")
-    ax[0].set_xlabel("점수")
-    ax[0].set_ylabel("빈도")
-    # 상위 평점 작품 Top10 막대차트
-    top10 = df.nlargest(10, '점수')[['드라마명', '점수']].set_index('드라마명')
-    top10.plot.barh(legend=False, ax=ax[1])
-    ax[1].invert_yaxis()
-    ax[1].set_title("Top 10 평점 작품")
-    ax[1].set_xlabel("평점")
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    # (a) 점수 분포
+    axes[0].hist(df['점수'].astype(float), bins=20, color='skyblue')
+    axes[0].set_title("전체 드라마 평점 분포")
+    axes[0].set_xlabel("평점")
+    axes[0].set_ylabel("빈도")
+    # (b) Top10 평점 작품
+    top10 = df.nlargest(10, '점수')[['드라마명','점수']].set_index('드라마명')
+    top10 = top10.sort_values('점수')  # 막대 차트를 위에서 아래로
+    axes[1].barh(top10.index, top10['점수'], color='salmon')
+    axes[1].set_title("Top 10 평점 작품")
+    axes[1].set_xlabel("평점")
+    # 소수점 표시
+    for y, v in enumerate(top10['점수']):
+        axes[1].text(v + 0.02, y, f"{v:.2f}", va='center')
     st.pyplot(fig, use_container_width=True)
 
-    # 2) 연도별 플랫폼별 작품 수
+    # 2) 연도별 플랫폼별 드라마 수
     st.subheader("2) 연도별 플랫폼별 드라마 수")
     ct = df.explode('플랫폼').groupby(['방영년도','플랫폼']).size().unstack(fill_value=0)
     st.line_chart(ct, use_container_width=True)
 
-    # 3) 멀티장르 배우 vs 일반 배우의 평균 평점 비교
-    st.subheader("3) 멀티장르 배우 vs 단일장르 배우 평균 평점 비교")
-    # 배우별 출연작 장르 수 계산
+    # 3) 멀티장르 vs 단일장르 배우 평균 평점 비교
+    st.subheader("3) 멀티장르 배우 vs 단일장르 배우 평균 평점")
     actor_genre_counts = df.explode('장르').groupby('배우명')['장르'].nunique()
-    multi = actor_genre_counts[actor_genre_counts > 1].index
-    single = actor_genre_counts[actor_genre_counts == 1].index
-    df['배우구분'] = df['배우명'].apply(lambda x: '멀티장르' if x in multi else '단일장르')
-    grp = df.groupby('배우구분')['점수'].mean()
-    st.bar_chart(grp, use_container_width=True)
+    multi_idx = actor_genre_counts[actor_genre_counts > 1].index
+    df['장르구분'] = df['배우명'].apply(lambda x: '멀티장르' if x in multi_idx else '단일장르')
+    grp = df.groupby('장르구분')['점수'].mean()
+    fig, ax = plt.subplots(figsize=(6,4))
+    ax.bar(grp.index, grp.values, color=['#66c2a5','#fc8d62'])
+    ax.set_title("배우 장르구분별 평균 평점")
+    ax.set_ylabel("평균 평점")
+    for i, v in enumerate(grp.values):
+        ax.text(i, v + 0.01, f"{v:.2f}", ha='center')
+    st.pyplot(fig, use_container_width=True)
 
-    # 4) 신인(출연작 1-2개) vs 경력(3개 이상) 배우 평점 비교
-    st.subheader("4) 신인 vs 경력 배우 평균 평점 비교")
+    # 4) 신인 vs 경력 배우 평균 평점 비교
+    st.subheader("4) 신인(1-2개) vs 경력(3+개) 배우 평균 평점")
     actor_counts = df.groupby('배우명').size()
-    newbies = actor_counts[(actor_counts <= 2)].index
-    vets     = actor_counts[(actor_counts >= 3)].index
-    df['경력구분'] = df['배우명'].apply(lambda x: '신인(1-2개)' if x in newbies else ('경력(3+개)' if x in vets else ''))
+    newbies = actor_counts[actor_counts <= 2].index
+    vets    = actor_counts[actor_counts >= 3].index
+    df['경력구분'] = df['배우명'].apply(
+        lambda x: '신인(1-2개)' if x in newbies else ('경력(3+개)' if x in vets else '')
+    )
     grp2 = df[df['경력구분']!=''].groupby('경력구분')['점수'].mean()
-    st.bar_chart(grp2, use_container_width=True)
+    fig, ax = plt.subplots(figsize=(6,4))
+    ax.bar(grp2.index, grp2.values, color=['#8da0cb','#e78ac3'])
+    ax.set_title("경력구분별 평균 평점")
+    ax.set_ylabel("평균 평점")
+    for i, v in enumerate(grp2.values):
+        ax.text(i, v + 0.01, f"{v:.2f}", ha='center')
+    st.pyplot(fig, use_container_width=True)
 
-    # 5) 연도별 Top5 장르 작품 수 변화
+    # 5) 연도별 Top5 장르 드라마 수 변화 (라인 플롯)
     st.subheader("5) 연도별 Top5 장르 드라마 수 변화")
-    # 장르별 전체 출연 횟수로 Top5 선정
     top5_genres = pd.Series(genre_list).value_counts().head(5).index
-    df_top5 = df.explode('장르')
-    df_top5 = df_top5[df_top5['장르'].isin(top5_genres)]
+    df_top5 = df.explode('장르').query("장르 in @top5_genres")
     ct2 = df_top5.groupby(['방영년도','장르']).size().unstack(fill_value=0)
-    st.area_chart(ct2, use_container_width=True)
+    st.line_chart(ct2, use_container_width=True)
 
-    # 6) 배우별 ‘흥행 변동성’ 분석 (평점의 표준편차)
+    # 6) 배우별 평점 변동성 (표준편차 상위 10)
     st.subheader("6) 배우별 평점 변동성 (표준편차 상위 10)")
-    actor_std = df.groupby('배우명')['점수'].std().dropna()
-    top_std = actor_std.nlargest(10)
-    st.bar_chart(top_std, use_container_width=True)
-
+    actor_std = df.groupby('배우명')['점수'].std().dropna().nlargest(10)
+    fig, ax = plt.subplots(figsize=(6,4))
+    ax.bar(actor_std.index, actor_std.values, color='tan')
+    ax.set_title("평점 변동성(표준편차) 상위 10 배우")
+    ax.set_ylabel("표준편차")
+    ax.set_xticklabels(actor_std.index, rotation=45, ha='right')
+    st.pyplot(fig, use_container_width=True)
 
 # 4.4 워드클라우드
 with tabs[3]:

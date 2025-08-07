@@ -99,7 +99,7 @@ with tabs[2]:
         st.line_chart(df['방영년도'].value_counts().sort_index())
         genre_mean = {}
         for g in pd.Series(genre_list).unique():
-            genre_mean[g] = df[df['장르'].str.contains(g)]['가중평점'].astype(float).mean()
+            genre_mean[g] = df[df['장르'].str.contains(g)]['점수'].astype(float).mean()
         genre_mean_df = pd.DataFrame({'장르': genre_mean.keys(), '평균가중평점': genre_mean.values()}).sort_values('평균가중평점', ascending=False)
         st.write("장르별 평균 가중평점(상위 10)")
         st.dataframe(genre_mean_df.head(10))

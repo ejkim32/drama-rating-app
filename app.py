@@ -144,38 +144,65 @@ with tabs[1]:
     st.pyplot(fig, use_container_width=True)
 
 # 4.3 분포/교차분석
+# 4.3 분포/교차분석
 with tabs[2]:
     st.header("분포/교차분석")
-    genre_count = pd.Series(genre_list).value_counts().head(10)
-    st.subheader("장르별 출연 횟수 (Top 10)")
-    st.bar_chart(genre_count, use_container_width=True)
-    st.subheader("방영년도별 작품 수")
-    st.line_chart(df['방영년도'].value_counts().sort_index(), use_container_width=True)
 
-    # 장르별 평균 점수
-    genre_mean = {
-        g: df[df['장르'].str.contains(g, na=False)]['점수'].astype(float).mean()
-        for g in unique_genres
-    }
-    genre_mean_df = (
-        pd.DataFrame.from_dict(genre_mean, orient='index', columns=['평균점수'])
-        .sort_values('평균점수', ascending=False)
-        .head(10)
-    )
-    st.subheader("장르별 평균 점수 (Top 10)")
-    st.dataframe(genre_mean_df, use_container_width=True)
+    # 1) 드라마 점수 분포 & 상위 평점 작품 Top10
+    st.subheader("1) 드라마 점수 분포 & Top 10 평점 작품")
+    fig, ax = plt.subplots(1, 2, figsize=(12, 4))
+    # 점수 분포 히스토그램
+    ax[0].hist(df['점수'].astype(float), bins=20)
+    ax[0].set_title("전체 점수 분포")
+    ax[0].set_xlabel("점수")
+    ax[0].set_ylabel("빈도")
+    # 상위 평점 작품 Top10 막대차트
+    top10 = df.nlargest(10, '점수')[['드라마명', '점수']].set_index('드라마명')
+    top10.plot.barh(legend=False, ax=ax[1])
+    ax[1].invert_yaxis()
+    ax[1].set_title("Top 10 평점 작품")
+    ax[1].set_xlabel("평점")
+    st.pyplot(fig, use_container_width=True)
 
-    # 플랫폼별 평균 점수
-    broadcaster_mean = {
-        b: df[df['플랫폼'].str.contains(b, na=False)]['점수'].astype(float).mean()
-        for b in set(broadcaster_list)
-    }
-    broadcaster_mean_df = (
-        pd.DataFrame.from_dict(broadcaster_mean, orient='index', columns=['평균점수'])
-        .sort_values('평균점수', ascending=False)
-    )
-    st.subheader("플랫폼별 평균 점수")
-    st.dataframe(broadcaster_mean_df, use_container_width=True)
+    # 2) 연도별 플랫폼별 작품 수
+    st.subheader("2) 연도별 플랫폼별 드라마 수")
+    ct = df.explode('플랫폼').groupby(['방영년도','플랫폼']).size().unstack(fill_value=0)
+    st.line_chart(ct, use_container_width=True)
+
+    # 3) 멀티장르 배우 vs 일반 배우의 평균 평점 비교
+    st.subheader("3) 멀티장르 배우 vs 단일장르 배우 평균 평점 비교")
+    # 배우별 출연작 장르 수 계산
+    actor_genre_counts = df.explode('장르').groupby('배우명')['장르'].nunique()
+    multi = actor_genre_counts[actor_genre_counts > 1].index
+    single = actor_genre_counts[actor_genre_counts == 1].index
+    df['배우구분'] = df['배우명'].apply(lambda x: '멀티장르' if x in multi else '단일장르')
+    grp = df.groupby('배우구분')['점수'].mean()
+    st.bar_chart(grp, use_container_width=True)
+
+    # 4) 신인(출연작 1-2개) vs 경력(3개 이상) 배우 평점 비교
+    st.subheader("4) 신인 vs 경력 배우 평균 평점 비교")
+    actor_counts = df.groupby('배우명').size()
+    newbies = actor_counts[(actor_counts <= 2)].index
+    vets     = actor_counts[(actor_counts >= 3)].index
+    df['경력구분'] = df['배우명'].apply(lambda x: '신인(1-2개)' if x in newbies else ('경력(3+개)' if x in vets else ''))
+    grp2 = df[df['경력구분']!=''].groupby('경력구분')['점수'].mean()
+    st.bar_chart(grp2, use_container_width=True)
+
+    # 5) 연도별 Top5 장르 작품 수 변화
+    st.subheader("5) 연도별 Top5 장르 드라마 수 변화")
+    # 장르별 전체 출연 횟수로 Top5 선정
+    top5_genres = pd.Series(genre_list).value_counts().head(5).index
+    df_top5 = df.explode('장르')
+    df_top5 = df_top5[df_top5['장르'].isin(top5_genres)]
+    ct2 = df_top5.groupby(['방영년도','장르']).size().unstack(fill_value=0)
+    st.area_chart(ct2, use_container_width=True)
+
+    # 6) 배우별 ‘흥행 변동성’ 분석 (평점의 표준편차)
+    st.subheader("6) 배우별 평점 변동성 (표준편차 상위 10)")
+    actor_std = df.groupby('배우명')['점수'].std().dropna()
+    top_std = actor_std.nlargest(10)
+    st.bar_chart(top_std, use_container_width=True)
+
 
 # 4.4 워드클라우드
 with tabs[3]:

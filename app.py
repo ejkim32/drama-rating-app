@@ -243,7 +243,21 @@ if predict_btn:
     st.info("모델을 훈련하고 예측 중입니다...")
     from sklearn.linear_model import LinearRegression
     from sklearn.ensemble import RandomForestRegressor
-
+def flatten_list_str(x):
+    # 안전하게 리스트 문자열 → 쉼표구분 단일 문자열 변환
+    try:
+        items = ast.literal_eval(x)
+        if isinstance(items, list):
+            return ','.join([str(i).strip() for i in items])
+        else:
+            return str(items)
+    except:
+        return str(x) if pd.notnull(x) else ''
+# '장르', '플랫폼' 등 리스트형 컬럼 flatten 처리 (존재할 경우만)
+for col in ['장르', '플랫폼', '방영요일']:
+    if col in X.columns:
+        X[col] = X[col].astype(str).apply(flatten_list_str)
+    X = X.fillna('')
     X = df[feature_cols].copy()
     y = df['점수'].astype(float)
     X = pd.get_dummies(X, columns=[col for col in feature_cols if X[col].dtype == 'object'])

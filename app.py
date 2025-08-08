@@ -42,7 +42,7 @@ st.set_page_config(
     page_title="K-드라마 데이터 분석 및 예측",
     page_icon="🎬",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # =========================

@@ -361,103 +361,57 @@ with tabs[6]:
         st.warning("사이드바에서 특성을 1개 이상 선택하세요.")
         
 with tabs[7]:
-    st.header("🔍 GridSearchCV (하이퍼파라미터 튜닝)")
-
-    # 1) 모델 타입과 파라미터 그리드 설정
-    model_type = st.selectbox("모델 선택", ["RandomForest", "Ridge"])
-    if model_type == "RandomForest":
-        n_estimators = st.slider("n_estimators", 50, 300, (100, 200), step=50)
-        max_depth    = st.slider("max_depth",    3,  20,  (5,  10),  step=1)
-        param_grid = {
-            "model__n_estimators": list(range(n_estimators[0], n_estimators[1]+1, 50)),
-            "model__max_depth":    list(range(max_depth[0],   max_depth[1]+1,   1))
+    st.header("하이퍼파라미터 튜닝 (RandomizedSearchCV)")
+    model_type = st.selectbox("모델 선택", ["RandomForest","Ridge"], key="tune_model")
+    if model_type=="RandomForest":
+        param_dist = {
+            "model__n_estimators": stats.randint(50,300),
+            "model__max_depth":    stats.randint(3,20)
         }
     else:
-        alpha_range = st.slider("alpha (Ridge)", 0.1, 10.0, (1.0,5.0), step=0.1)
-        param_grid = {
-            "model__alpha": list(np.linspace(alpha_range[0], alpha_range[1], 10))
-        }
+        param_dist = {"model__alpha": stats.uniform(0.1,9.9)}
 
-    st.markdown("---")
+    feature_cols = st.multiselect("특성 선택", df.columns.drop("점수"), key="tune_feats")
+    test_size    = st.slider("테스트 비율", 0.1,0.5,0.2,0.05, key="tune_ts")
+    n_iter       = st.slider("랜덤 탐색 횟수", 5, 50, 10, key="tune_iter")
 
-    # 2) 데이터 준비
-    feature_cols = st.multiselect("특성 선택", df.columns.drop("점수"))
-    test_size    = st.slider("테스트 비율", 0.1, 0.5, 0.2, 0.05)
-
-    if not feature_cols:
-        st.warning("특성을 1개 이상 선택하세요.")
-    else:
+    if feature_cols:
         X = df[feature_cols]
         y = df["점수"].astype(float)
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=42
         )
-
-        # 3) Pipeline 정의
+        # Pipeline: 숫자, 단일/멀티카테고리 모두 인코딩
         num_cols   = [c for c in feature_cols if X_train[c].dtype in ["int64","float64"]]
-        # object 타입지만 리스트가 아닌 컬럼
-        cat_atomic = [
-            c for c in feature_cols
-            if X_train[c].dtype=="object" and not isinstance(X_train[c].iloc[0], list)
-        ]
-        # 리스트형 멀티카테고리 컬럼
-        cat_multi  = [
-            c for c in feature_cols
-            if X_train[c].dtype=="object" and isinstance(X_train[c].iloc[0], list)
-        ]
-
+        cat_atomic = [c for c in feature_cols
+                      if X_train[c].dtype=="object" and not isinstance(X_train[c].iloc[0], list)]
+        cat_multi  = [c for c in feature_cols
+                      if X_train[c].dtype=="object" and isinstance(X_train[c].iloc[0], list)]
         preprocessor = ColumnTransformer([
             ("num",       "passthrough",                  num_cols),
             ("onehot",    OneHotEncoder(handle_unknown="ignore"), cat_atomic),
             ("multilabel", MultiLabelBinarizerTransformer(),      cat_multi),
         ], remainder="drop")
+        base_model = RandomForestRegressor(random_state=42) \
+                     if model_type=="RandomForest" else Ridge()
+        pipe = Pipeline([("preproc", preprocessor), ("model", base_model)])
 
-        model = (
-            RandomForestRegressor(random_state=42)
-            if model_type=="RandomForest"
-            else Ridge()
-        )
+        with st.spinner("랜덤 탐색 중..."):
+            rs = RandomizedSearchCV(pipe, param_dist,
+                                    n_iter=n_iter, cv=3, n_jobs=-1,
+                                    random_state=42, error_score=np.nan)
+            rs.fit(X_train, y_train)
 
-        pipe = Pipeline([
-            ("preproc", preprocessor),
-            ("model",   model)
-        ])
-
-        # 4) GridSearchCV 실행 (실패 조합은 NaN 처리)
-        with st.spinner("GridSearchCV 실행 중..."):
-            gs = GridSearchCV(
-                pipe,
-                param_grid,
-                cv=3,
-                n_jobs=-1,
-                error_score=float("nan")
-            )
-            gs.fit(X_train, y_train)
-
-        # 5) 최적 파라미터 & 성능 표시
         st.subheader("최적 파라미터")
-        st.json(gs.best_params_)
+        st.json(rs.best_params_)
+        st.metric("CV R²", f"{rs.best_score_:.3f}")
 
-        st.subheader("최적 CV R² 점수")
-        st.metric("Best CV R²", f"{gs.best_score_:.3f}")
-
-        st.subheader("전체 CV 결과")
-        cv_df = pd.DataFrame(gs.cv_results_)[[
-            "params", "mean_test_score", "std_test_score", "rank_test_score"
-        ]].sort_values("rank_test_score")
-        st.dataframe(cv_df, use_container_width=True)
-
-        # 6) 테스트 세트 성능
-        y_pred = gs.best_estimator_.predict(X_test)
+        y_pred = rs.predict(X_test)
         st.subheader("테스트 세트 성능")
         st.metric("Test R²", f"{r2_score(y_test, y_pred):.3f}")
         st.metric("Test MSE", f"{mean_squared_error(y_test, y_pred):.3f}")
-
-        st.subheader("실제 vs 예측 (상위 5개)")
-        st.dataframe(
-            pd.DataFrame({"실제": y_test, "예측": y_pred}).head(),
-            use_container_width=True
-        )
+    else:
+        st.warning("튜닝할 특성을 1개 이상 선택하세요.")
 with tabs[8]:
     st.header("🎯 예상 평점예측")
 

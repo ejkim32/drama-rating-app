@@ -416,7 +416,7 @@ with tabs[7]:
 
         # 4) GridSearchCV 실행
         with st.spinner("GridSearchCV 실행 중..."):
-            gs = GridSearchCV(pipe, param_grid, cv=3, n_jobs=-1, error_score=np.nan)
+            gs = GridSearchCV(pipe, param_grid, cv=3, n_jobs=-1, error_score=float("nan"))
             gs.fit(X_train, y_train)
 
         # 5) 결과 표시

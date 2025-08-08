@@ -361,22 +361,28 @@ with tabs[6]:
         
 with tabs[7]:
     st.header("🔍 GridSearchCV (하이퍼파라미터 튜닝)")
-    
+
     # 1) 모델 타입과 파라미터 그리드 설정
     model_type = st.selectbox("모델 선택", ["RandomForest", "Ridge"])
     if model_type == "RandomForest":
-        # ...
-        param_grid = { ... }
+        n_estimators = st.slider("n_estimators", 50, 300, (100, 200), step=50)
+        max_depth    = st.slider("max_depth",    3,  20,  (5,  10),  step=1)
+        param_grid = {
+            "model__n_estimators": list(range(n_estimators[0], n_estimators[1]+1, 50)),
+            "model__max_depth":    list(range(max_depth[0],   max_depth[1]+1,   1))
+        }
     else:
-        # ...
-        param_grid = { ... }
-    
+        alpha_range = st.slider("alpha (Ridge)", 0.1, 10.0, (1.0, 5.0), step=0.1)
+        param_grid = {
+            "model__alpha": list(np.linspace(alpha_range[0], alpha_range[1], 10))
+        }
+
     st.markdown("---")
-    
+
     # 2) 데이터 준비
     feature_cols = st.multiselect("특성 선택", df.columns.drop("점수"))
-    test_size     = st.slider("테스트 비율", 0.1, 0.5, 0.2, 0.05)
-    
+    test_size    = st.slider("테스트 비율", 0.1, 0.5, 0.2, 0.05)
+
     if not feature_cols:
         st.warning("특성을 1개 이상 선택하세요.")
     else:
@@ -386,27 +392,37 @@ with tabs[7]:
             X, y, test_size=test_size, random_state=42
         )
 
-        # ✨ 3) Pipeline 정의
-        num_cols = [...]
-        cat_atomic = [...]
-        cat_multi = [...]
-        preprocessor = ColumnTransformer([...])
-        model = RandomForestRegressor(...) if ... else Ridge()
-        pipe = Pipeline([("preproc", preprocessor), ("model", model)])
+        # 3) Pipeline 정의 (숫자 / 단일 카테고리 / 멀티 카테고리 분리)
+        num_cols     = [c for c in feature_cols if X_train[c].dtype in ["int64","float64"]]
+        cat_atomic   = [c for c in feature_cols
+                        if X_train[c].dtype == "object" and not isinstance(X_train[c].iloc[0], list)]
+        cat_multi    = [c for c in feature_cols
+                        if X_train[c].dtype == "object" and isinstance(X_train[c].iloc[0], list)]
 
-        # 4) 단일 파라미터 테스트 (생략 가능)
-        # params = list(ParameterGrid(param_grid))[0]
-        # pipe.set_params(**params)
-        # pipe.fit(X_train, y_train)
+        preprocessor = ColumnTransformer([
+            ("num",      "passthrough",                     num_cols),
+            ("onehot",   OneHotEncoder(handle_unknown="ignore"), cat_atomic),
+            ("multilabel", MultiLabelBinarizerTransformer(),     cat_multi)
+        ], remainder="drop")
 
-        # 5) GridSearchCV 실행
+        model = (RandomForestRegressor(random_state=42)
+                 if model_type == "RandomForest"
+                 else Ridge())
+
+        pipe = Pipeline([
+            ("preproc", preprocessor),
+            ("model",   model)
+        ])
+
+        # 4) GridSearchCV 실행
         with st.spinner("GridSearchCV 실행 중..."):
-            gs = GridSearchCV(pipe, param_grid, cv=3, n_jobs=-1)
+            gs = GridSearchCV(pipe, param_grid, cv=3, n_jobs=-1, error_score=np.nan)
             gs.fit(X_train, y_train)
 
-        # 6) 결과 표시
+        # 5) 결과 표시
         st.subheader("최적 파라미터")
         st.json(gs.best_params_)
+
         st.subheader("최적 CV R² 점수")
         st.metric("Best CV R²", f"{gs.best_score_:.3f}")
 
@@ -416,10 +432,10 @@ with tabs[7]:
         ]].sort_values("rank_test_score")
         st.dataframe(cv_df, use_container_width=True)
 
-        # 7) 테스트 세트 성능
+        # 6) 테스트 세트 성능
         y_pred = gs.best_estimator_.predict(X_test)
         st.subheader("테스트 세트 성능")
-        st.metric("Test R²", f"{r2_score(y_test, y_pred):.3f}")
+        st.metric("Test R²",  f"{r2_score(y_test, y_pred):.3f}")
         st.metric("Test MSE", f"{mean_squared_error(y_test, y_pred):.3f}")
 
         st.subheader("실제 vs 예측 (상위 5개)")

@@ -79,7 +79,7 @@ for col in mlb_cols:
     arr = mlb.fit_transform(df[col])
     new_cols = [f"{col}_{c.upper()}" for c in mlb.classes_]
     df = pd.concat([df, pd.DataFrame(arr, columns=new_cols, index=df.index)], axis=1)
-df.drop(columns=mlb_cols, inplace=True)
+
 
 # =========================
 # 2. 전처리 함수
@@ -678,7 +678,7 @@ with tabs[7]:
             f"{mean_squared_error(y_test, y_pred, squared=False):.3f}",
         )
 
-
+df.drop(columns=mlb_cols, inplace=True)
 with tabs[8]:
     st.header("🎯 예상 평점예측")
 

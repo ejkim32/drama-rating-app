@@ -663,7 +663,11 @@ with tabs[7]:
                 scoring="r2",
                 error_score="raise",
             )
-            gs.fit(X_train, y_train)
+            try:
+                gs.fit(X_train, y_train)
+            except ValueError as e:
+                st.error(f"GridSearchCV 실패: {e}")
+                st.stop()
 
         # 10) 결과 출력
         st.subheader("최적 파라미터")

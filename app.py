@@ -224,6 +224,13 @@ with tabs[2]:
         title='배우 장르구분별 평균 평점',
         labels={'점수':'평균 평점','장르구분':'배우구분'}
     )
+    fig3.update_yaxes(
+    tickformat=".2f",   # 소수점 2자리까지 레이블
+    dtick=0.1,          # 0.1 단위 눈금
+    showgrid=True,      # 그리드 켜기
+    gridcolor="LightGray",
+    gridwidth=1
+    )
     st.plotly_chart(fig3, use_container_width=True)
 
     # 4) 신인 vs 경력 배우 평균 평점 비교

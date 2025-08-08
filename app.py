@@ -336,7 +336,8 @@ with tabs[6]:
         st.dataframe(pd.DataFrame({'실제': y_test, '예측': y_pred}).head())
     else:
         st.warning("사이드바에서 특성을 1개 이상 선택하세요.")
-with tabs[3]:
+        
+with tabs[7]:
     st.header("🔍 GridSearchCV (하이퍼파라미터 튜닝)")
     
     # 1) 모델 타입과 파라미터 그리드 설정

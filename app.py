@@ -35,6 +35,17 @@ class MultiLabelBinarizerTransformer(BaseEstimator, TransformerMixin):
         lists = X.squeeze()
         return self.mlb.transform(lists)
 
+def clean_cell(x):
+    if isinstance(x, list):
+        return x
+    if pd.isna(x):
+        return []
+    if isinstance(x, str):
+        try:
+            return ast.literal_eval(x)
+        except:
+            return [x.strip()]
+    return [str(x)]
 
 # =========================
 # 0. 페이지 설정

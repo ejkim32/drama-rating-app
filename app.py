@@ -230,9 +230,16 @@ with tabs[2]:
     # 2) 연도별 플랫폼별 드라마 수
     st.subheader("2) 연도별 플랫폼별 드라마 수")
 
-    # 원본 집계
-    ct = df.explode('플랫폼').groupby(['방영년도','플랫폼']).size().reset_index(name='count')
-
+    # 원본 리스트 컬럼(raw_platform)을 이용해서 explode
+    ct = (
+        pd.DataFrame({
+            '방영년도': df['방영년도'],
+            '플랫폼':   raw_platform
+        })
+      .explode('플랫폼')
+        .groupby(['방영년도','플랫폼'])
+        .size().reset_index(name='count')
+    )
     # 보고 싶은 플랫폼 리스트
     focus_plats = ['KBS', 'MBC', 'TVN', 'NETFLIX', 'JTBC']
 
@@ -276,7 +283,15 @@ OTT-방송사 동시방영 등 시장 재편이 복합적으로 작용한 결과
 
     # 3) 멀티장르 vs 단일장르 배우 평균 평점 비교
     st.subheader("3) 멀티장르 vs 단일장르 배우 평균 평점")
-    actor_genre_counts = df.explode('장르').groupby('배우명')['장르'].nunique()
+    actor_genre_counts = (
+        pd.DataFrame({
+            '배우명': df['배우명'],
+            '장르':   raw_genres
+        })
+        .explode('장르')
+        .groupby('배우명')['장르']
+        .nunique()
+    )
     multi = actor_genre_counts[actor_genre_counts>1].index
     df['장르구분'] = df['배우명'].apply(lambda x: '멀티장르' if x in multi else '단일장르')
     grp = df.groupby('장르구분')['점수'].mean().reset_index()
@@ -327,8 +342,16 @@ OTT-방송사 동시방영 등 시장 재편이 복합적으로 작용한 결과
     # 5) 연도별 Top5 장르 드라마 수 변화
     st.subheader("5) 연도별 Top5 장르 드라마 수 변화")
     top5 = pd.Series(genre_list).value_counts().head(5).index
-    df_top5 = df.explode('장르').query("장르 in @top5")
-    ct5 = df_top5.groupby(['방영년도','장르']).size().reset_index(name='count')
+    df_top5 = (
+        pd.DataFrame({
+            '방영년도': df['방영년도'],
+            '장르':     raw_genres
+        })
+        .explode('장르')
+        .query("장르 in @top5")
+    )
+    ct5 = df_top5.groupby(['방영년도','장르']) \
+               .size().reset_index(name='count')
     fig5 = px.line(
         ct5, x='방영년도', y='count', color='장르',
         title='연도별 Top5 장르 작품 수 변화',

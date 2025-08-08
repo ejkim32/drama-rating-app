@@ -440,8 +440,8 @@ with tabs[7]:
 
     # 1) 모델 선택
     model_name = st.selectbox(
-        "모델 선택",
-        [
+        label= "모델 선택",
+        options = [
             "KNN", "LinearRegression", "Ridge", "Lasso",
             "ElasticNet", "SGDRegressor", "SVR",
             "DecisionTree", "RandomForest", "XGBRegressor"

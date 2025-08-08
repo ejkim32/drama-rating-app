@@ -204,13 +204,26 @@ with tabs[2]:
 
     # 2) 연도별 플랫폼별 드라마 수
     st.subheader("2) 연도별 플랫폼별 드라마 수")
+
+    # 원본 집계
     ct = df.explode('플랫폼').groupby(['방영년도','플랫폼']).size().reset_index(name='count')
+
+    # 보고 싶은 플랫폼 리스트
+    focus_plats = ['KBS', 'MBC', 'TVN', 'NETFLIX', 'JTBC']
+
+    # 대문자/소문자 섞여 있을 수 있으니 모두 대문자로 맞춰 필터
+    ct['플랫폼_up'] = ct['플랫폼'].str.upper()
+    ct_focused = ct[ct['플랫폼_up'].isin(focus_plats)].copy()
+    
+    # 차트 그리기
     fig2 = px.line(
-        ct, x='방영년도', y='count', color='플랫폼',
-        title='연도별 플랫폼별 드라마 수',
+        ct_focused,
+        x='방영년도', y='count', color='플랫폼',
+        title='연도별 주요 플랫폼별 드라마 수',
         labels={'count':'작품 수','방영년도':'방영년도'}
     )
     st.plotly_chart(fig2, use_container_width=True)
+
 
     # 3) 멀티장르 vs 단일장르 배우 평균 평점 비교
     st.subheader("3) 멀티장르 vs 단일장르 배우 평균 평점")

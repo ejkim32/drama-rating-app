@@ -4,4 +4,4 @@ matplotlib
 scikit-learn
 wordcloud
 plotly
-
+xgboost

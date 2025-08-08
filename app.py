@@ -599,6 +599,57 @@ with tabs[7]:
                 "model__max_depth": [
                     None,
                     5,
+                    10,
+                    20,
+                ]
+            },
+            "RandomForest": {
+                "model__n_estimators": [
+                    50,
+                    100,
+                    200,
+                ],
+                "model__max_depth": [
+                    None,
+                    5,
+                    10,
+                ],
+            },
+            "XGBRegressor": {
+                "model__n_estimators": [
+                    50,
+                    100,
+                    200,
+                ],
+                "model__max_depth": [3, 6, 9],
+            },
+        }
+        param_grid = grids[model_name]
+
+        # 9) GridSearchCV 수행
+        with st.spinner("GridSearchCV 실행 중…"):
+            gs = GridSearchCV(
+                pipe,
+                param_grid,
+                cv=3,
+                n_jobs=-1,
+                scoring="r2",
+                error_score="raise",
+            )
+            gs.fit(X_train, y_train)
+
+        # 10) 결과 출력
+        st.subheader("최적 파라미터")
+        st.json(gs.best_params_)
+        st.metric("Best CV R²", f"{gs.best_score_:.3f}")
+
+        y_pred = gs.predict(X_test)
+        st.subheader("테스트 세트 성능")
+        st.metric("Test R²", f"{r2_score(y_test, y_pred):.3f}")
+        st.metric(
+            "Test RMSE",
+            f"{mean_squared_error(y_test, y_pred, squared=False):.3f}",
+        )
 
 
 with tabs[8]:

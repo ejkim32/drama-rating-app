@@ -352,13 +352,13 @@ with tabs[7]:
         max_depth   = st.slider("max_depth", 3, 20, (5, 10), step=1)
         param_grid = {
             "model__n_estimators": list(range(n_estimators[0], n_estimators[1]+1, 50)),
-            "model__max_depth":     list(range(max_depth[0],   max_depth[1]+1,   1))
+            "model__max_depth":    list(range(max_depth[0],   max_depth[1]+1,   1))
         }
     else:
         alpha_range = st.slider("alpha (Ridge)", 0.1, 10.0, (1.0, 5.0), step=0.1)
         param_grid = {
             "model__alpha": list(
-                pd.np.linspace(alpha_range[0], alpha_range[1], 10)
+                np.linspace(alpha_range[0], alpha_range[1], 10)
             )
         }
     
@@ -368,7 +368,7 @@ with tabs[7]:
     feature_cols = st.multiselect("특성 선택", df.columns.drop("점수"))
     test_size     = st.slider("테스트 비율", 0.1, 0.5, 0.2, 0.05)
     
-    if len(feature_cols) < 1:
+    if not feature_cols:
         st.warning("특성을 1개 이상 선택하세요.")
     else:
         X = df[feature_cols]
@@ -377,18 +377,23 @@ with tabs[7]:
             X, y, test_size=test_size, random_state=42
         )
     
-        # 3) Pipeline 정의
+        # ✨ 3) Pipeline 정의 (ColumnTransformer + OneHotEncoder)
+        # 수치형 / 범주형 피처 분리
+        num_cols = [c for c in feature_cols if X_train[c].dtype in ['int64','float64']]
+        cat_cols = [c for c in feature_cols if X_train[c].dtype == 'object']
+        
+        preprocessor = ColumnTransformer([
+            ("num", "passthrough", num_cols),
+            ("cat", OneHotEncoder(handle_unknown="ignore"), cat_cols)
+        ])
+        
+        model = (RandomForestRegressor(random_state=42)
+                 if model_type=="RandomForest"
+                 else Ridge())
+        
         pipe = Pipeline([
-            ("preproc", FunctionTransformer(
-                lambda df: pd.get_dummies(
-                    preprocess_ml_features(df),
-                    columns=[c for c in df.columns if df[c].dtype == "object"]
-                )
-            )),
-            ("model", 
-             RandomForestRegressor(random_state=42)
-             if model_type=="RandomForest"
-             else Ridge())
+            ("preproc", preprocessor),
+            ("model", model)
         ])
     
         # 4) GridSearchCV 실행
@@ -396,7 +401,7 @@ with tabs[7]:
             gs = GridSearchCV(pipe, param_grid, cv=3, n_jobs=-1)
             gs.fit(X_train, y_train)
     
-        # 5) 최적 파라미터 & CV 결과 표시
+        # 5) 결과 표시
         st.subheader("최적 파라미터")
         st.json(gs.best_params_)
     
@@ -405,7 +410,7 @@ with tabs[7]:
     
         st.subheader("전체 CV 결과")
         cv_df = pd.DataFrame(gs.cv_results_)[[
-            "params", "mean_test_score", "std_test_score", "rank_test_score"
+            "params","mean_test_score","std_test_score","rank_test_score"
         ]].sort_values("rank_test_score")
         st.dataframe(cv_df, use_container_width=True)
     

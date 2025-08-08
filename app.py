@@ -19,9 +19,8 @@ from xgboost import XGBRegressor
 
 # 한글 폰트 설정 (Windows: Malgun Gothic, macOS/Linux는 적절한 한글 폰트로)
 # 1) 사용할 한글 폰트 이름 설정
-matplotlib.rcParams['font.family'] = 'NanumGothic'
-# 2) 음수 기호가 깨지지 않도록
-matplotlib.rcParams['axes.unicode_minus'] = False
+matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+matplotlib.rcParams['axes.unicode_minus'] = False 
 
 class MultiLabelBinarizerTransformer(BaseEstimator, TransformerMixin):
     """리스트형 멀티카테고리(예: ['로맨스','스릴러'])를 이진 벡터로 변환"""
@@ -437,21 +436,15 @@ with tabs[6]:
         
 with tabs[7]:
     st.header("🔧 모델 튜닝 (GridSearchCV)")
+
     # 1) 모델 선택
-    model_name = st.selectbox("모델 선택", [
-        "KNN", "LinearRegression", "Ridge", "Lasso",
-        "ElasticNet", "SGDRegressor", "SVR",
-        "DecisionTree", "RandomForest", "XGBRegressor"
-    ], key="tune_model")
+    model_name = st.selectbox(...)
 
-    # 2) 공통 파라미터 입력
-    test_size = st.slider("테스트셋 비율", 0.1, 0.5, 0.2, 0.05)
-    safe_feats = [c for c in df.columns if c not in ['점수']]
-    feature_cols = st.multiselect("튜닝할 특성 선택", safe_feats, key="tune_feats")
+    # 2) 공통 파라미터
+    test_size    = st.slider(...)
+    feature_cols = st.multiselect(...)
 
-    if not feature_cols:
-        st.warning("특성을 1개 이상 선택하세요.")
-    else:
+    if feature_cols:
         # 3) 데이터 분할
         X = df[feature_cols]
         y = df["점수"].astype(float)
@@ -459,40 +452,45 @@ with tabs[7]:
             X, y, test_size=test_size, random_state=42
         )
 
-        # 4) 전처리 + 폴리/스케일러 + 모델 파이프라인 준비
-        from sklearn.preprocessing import PolynomialFeatures, StandardScaler
-        from sklearn.neighbors import KNeighborsRegressor
-        from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet, SGDRegressor
-        from sklearn.svm import SVR
-        from sklearn.tree import DecisionTreeRegressor
-        from sklearn.ensemble import RandomForestRegressor
-        from xgboost import XGBRegressor
+        # 4) 수치/범주(단일)/범주(멀티) 분리
+        num_cols     = [c for c in feature_cols if X_train[c].dtype in ["int64","float64"]]
+        cat_single   = [c for c in feature_cols
+                          if X_train[c].dtype == "object"
+                             and not isinstance(X_train[c].iloc[0], list)]
+        cat_multi    = [c for c in feature_cols
+                          if X_train[c].dtype == "object"
+                             and isinstance(X_train[c].iloc[0], list)]
 
-        # 수치형/범주형 분리(필요하다면)
-        num_cols = [c for c in feature_cols if X_train[c].dtype in ["int64","float64"]]
-        cat_cols = [c for c in feature_cols if X_train[c].dtype == "object"]
-
+        # 5) 전처리기 정의
         preprocessor = ColumnTransformer([
-            ("num", "passthrough", num_cols),
-            ("cat", OneHotEncoder(handle_unknown="ignore"), cat_cols)
+            ("num",     "passthrough",              num_cols),
+            ("onehot",  OneHotEncoder(handle_unknown="ignore"), cat_single),
+            ("mlb",     MultiLabelBinarizerTransformer(),      cat_multi),
         ], remainder="drop")
 
-        # 모델 맵핑
+        # 6) 모델 매핑
+        from sklearn.neighbors import KNeighborsRegressor
+        from sklearn.linear_model  import LinearRegression, Ridge, Lasso, ElasticNet, SGDRegressor
+        from sklearn.svm          import SVR
+        from sklearn.tree         import DecisionTreeRegressor
+        from sklearn.ensemble     import RandomForestRegressor
+        from xgboost              import XGBRegressor
+
         model_map = {
-            "KNN":           KNeighborsRegressor(),
-            "LinearRegression": LinearRegression(),
-            "Ridge":         Ridge(),
-            "Lasso":         Lasso(),
-            "ElasticNet":    ElasticNet(),
-            "SGDRegressor":  SGDRegressor(max_iter=1000, tol=1e-3),
-            "SVR":           SVR(),
-            "DecisionTree":  DecisionTreeRegressor(random_state=42),
-            "RandomForest":  RandomForestRegressor(random_state=42),
-            "XGBRegressor":  XGBRegressor(random_state=42, use_label_encoder=False, eval_metric="rmse")
+          "KNN":              KNeighborsRegressor(),
+          "LinearRegression": LinearRegression(),
+          "Ridge":            Ridge(),
+          "Lasso":            Lasso(),
+          "ElasticNet":       ElasticNet(),
+          "SGDRegressor":     SGDRegressor(max_iter=1000, tol=1e-3),
+          "SVR":              SVR(),
+          "DecisionTree":     DecisionTreeRegressor(random_state=42),
+          "RandomForest":     RandomForestRegressor(random_state=42),
+          "XGBRegressor":     XGBRegressor(random_state=42, use_label_encoder=False, eval_metric="rmse")
         }
         model = model_map[model_name]
 
-        # 파이프라인 스텝 정의
+        # 7) 파이프라인 조립
         steps = [("pre", preprocessor)]
         if model_name == "KNN":
             steps += [
@@ -502,40 +500,38 @@ with tabs[7]:
         steps.append(("model", model))
         pipe = Pipeline(steps)
 
-        # 5) 모델별 하이퍼파라미터 그리드
+        # 8) 하이퍼파라미터 그리드
         grids = {
-            "KNN": {
-                "poly__degree": [1,2,3],
-                "model__n_neighbors": list(range(3,11))
-            },
-            "LinearRegression": {},
-            "Ridge":      {"model__alpha": [0.1,1.0,10.0]},
-            "Lasso":      {"model__alpha": [0.001,0.01,0.1,1.0]},
-            "ElasticNet": {"model__alpha": [0.01,0.1,1.0], "model__l1_ratio":[0.2,0.5,0.8]},
-            "SGDRegressor": {"model__alpha":[1e-4,1e-3,1e-2], "model__penalty":["l2","l1","elasticnet"]},
-            "SVR":        {"model__C":[0.1,1,10], "model__gamma":["scale","auto"]},
-            "DecisionTree": {"model__max_depth":[None,5,10,20]},
-            "RandomForest": {"model__n_estimators":[50,100,200], "model__max_depth":[None,5,10]},
-            "XGBRegressor": {"model__n_estimators":[50,100,200], "model__max_depth":[3,6,9]}
+          "KNN":            {"poly__degree":[1,2,3], "model__n_neighbors":list(range(3,11))},
+          "LinearRegression":{},
+          "Ridge":          {"model__alpha":[0.1,1.0,10.0]},
+          "Lasso":          {"model__alpha":[0.001,0.01,0.1,1.0]},
+          "ElasticNet":     {"model__alpha":[0.01,0.1,1.0], "model__l1_ratio":[0.2,0.5,0.8]},
+          "SGDRegressor":   {"model__alpha":[1e-4,1e-3,1e-2], "model__penalty":["l2","l1","elasticnet"]},
+          "SVR":            {"model__C":[0.1,1,10], "model__gamma":["scale","auto"]},
+          "DecisionTree":   {"model__max_depth":[None,5,10,20]},
+          "RandomForest":   {"model__n_estimators":[50,100,200], "model__max_depth":[None,5,10]},
+          "XGBRegressor":   {"model__n_estimators":[50,100,200], "model__max_depth":[3,6,9]}
         }
         param_grid = grids[model_name]
 
-        # 6) GridSearchCV 수행
+        # 9) GridSearchCV
         with st.spinner("GridSearchCV 실행 중…"):
             gs = GridSearchCV(pipe, param_grid, cv=3, n_jobs=-1,
                               scoring="r2", error_score="raise")
             gs.fit(X_train, y_train)
 
-        # 7) 결과 출력
+        # 10) 결과 출력
         st.subheader("최적 파라미터")
         st.json(gs.best_params_)
-        st.metric("Best CV R²", f"{gs.best_score_:.3f}")
-
-        # 테스트 세트 성능
+        st.metric("Best CV R²",     f"{gs.best_score_:.3f}")
         y_pred = gs.predict(X_test)
         st.subheader("테스트 세트 성능")
-        st.metric("Test R²", f"{r2_score(y_test, y_pred):.3f}")
-        st.metric("Test RMSE", f"{mean_squared_error(y_test, y_pred, squared=False):.3f}")
+        st.metric("Test R²",         f"{r2_score(y_test, y_pred):.3f}")
+        st.metric("Test RMSE",       f"{mean_squared_error(y_test, y_pred, squared=False):.3f}")
+
+    else:
+        st.warning("특성을 1개 이상 선택하세요.")
 
 with tabs[8]:
     st.header("🎯 예상 평점예측")

@@ -426,7 +426,7 @@ with tabs[7]:
     # 2) 공통 파라미터 입력
     test_size = st.slider("테스트셋 비율", 0.1, 0.5, 0.2, 0.05)
     feature_cols = st.multiselect(
-        "특성 선택", df.columns.drop("점수"), default=["나이","방영년도"]
+        "특성 선택", df.columns.drop("점수"), default=["나이","방영년도","역할","성별","결혼여부","연령대","장르","방영요일"]
     )
 
     if not feature_cols:

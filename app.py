@@ -46,7 +46,7 @@ def clean_cell(x):
             return [x.strip()]          # 그냥 문자열이면 리스트로 감싸기
     else:
         return [str(x)]
-
+df = load_data()
 mlb_cols = ['장르', '방영요일', '플랫폼']
 for col in mlb_cols:
     # (2) 원본 컬럼을 리스트 형태로 정리

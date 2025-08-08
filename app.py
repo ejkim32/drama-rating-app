@@ -10,7 +10,7 @@ from sklearn.metrics import r2_score, mean_squared_error
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import train_test_split, GridSearchCV, ParameterGrid
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, MultiLabelBinarizer
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import MultiLabelBinarizer
 

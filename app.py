@@ -8,7 +8,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.metrics import r2_score, mean_squared_error
 from sklearn.linear_model import Ridge
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, ParameterGrid
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 # 한글 폰트 설정 (Windows: Malgun Gothic, macOS/Linux는 적절한 한글 폰트로)

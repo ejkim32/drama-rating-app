@@ -253,6 +253,13 @@ with tabs[2]:
         title='경력구분별 평균 평점',
         labels={'점수':'평균 평점','경력구분':'배우구분'}
     )
+    fig4.update_yaxes(
+    tickformat=".2f",   # 소수점 2자리까지 레이블
+    dtick=0.5,          # 0.1 단위 눈금
+    showgrid=False,      # 그리드 켜기
+    gridcolor="LightGray",
+    gridwidth=1
+    )
     st.plotly_chart(fig4, use_container_width=True)
 
     # 5) 연도별 Top5 장르 드라마 수 변화

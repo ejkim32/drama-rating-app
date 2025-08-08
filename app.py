@@ -21,16 +21,17 @@ matplotlib.rcParams['font.family'] = 'NanumGothic'
 matplotlib.rcParams['axes.unicode_minus'] = False
 
 class MultiLabelBinarizerTransformer(BaseEstimator, TransformerMixin):
-    """리스트형 멀티카테고리(멀티라벨) 컬럼을 MultiLabelBinarizer로 인코딩"""
+    """리스트형 멀티카테고리(예: ['로맨스','스릴러'])를 이진 벡터로 변환"""
     def __init__(self):
         self.mlb = MultiLabelBinarizer()
     def fit(self, X, y=None):
-        # X는 리스트(list)로 구성된 Series
-        self.mlb.fit(X)
+        # X: 2D array or DataFrame of lists
+        lists = X.squeeze()  # 한 개 컬럼이면 Series로 변환
+        self.mlb.fit(lists)
         return self
     def transform(self, X):
-        # transform 시 numpy array 반환
-        return self.mlb.transform(X)
+        lists = X.squeeze()
+        return self.mlb.transform(lists)
 
 # =========================
 # 0. 페이지 설정
@@ -372,7 +373,7 @@ with tabs[7]:
             "model__max_depth":    list(range(max_depth[0],   max_depth[1]+1,   1))
         }
     else:
-        alpha_range = st.slider("alpha (Ridge)", 0.1, 10.0, (1.0, 5.0), step=0.1)
+        alpha_range = st.slider("alpha (Ridge)", 0.1, 10.0, (1.0,5.0), step=0.1)
         param_grid = {
             "model__alpha": list(np.linspace(alpha_range[0], alpha_range[1], 10))
         }
@@ -392,34 +393,48 @@ with tabs[7]:
             X, y, test_size=test_size, random_state=42
         )
 
-        # 3) Pipeline 정의 (숫자 / 단일 카테고리 / 멀티 카테고리 분리)
-        num_cols     = [c for c in feature_cols if X_train[c].dtype in ["int64","float64"]]
-        cat_atomic   = [c for c in feature_cols
-                        if X_train[c].dtype == "object" and not isinstance(X_train[c].iloc[0], list)]
-        cat_multi    = [c for c in feature_cols
-                        if X_train[c].dtype == "object" and isinstance(X_train[c].iloc[0], list)]
+        # 3) Pipeline 정의
+        num_cols   = [c for c in feature_cols if X_train[c].dtype in ["int64","float64"]]
+        # object 타입지만 리스트가 아닌 컬럼
+        cat_atomic = [
+            c for c in feature_cols
+            if X_train[c].dtype=="object" and not isinstance(X_train[c].iloc[0], list)
+        ]
+        # 리스트형 멀티카테고리 컬럼
+        cat_multi  = [
+            c for c in feature_cols
+            if X_train[c].dtype=="object" and isinstance(X_train[c].iloc[0], list)
+        ]
 
         preprocessor = ColumnTransformer([
-            ("num",      "passthrough",                     num_cols),
-            ("onehot",   OneHotEncoder(handle_unknown="ignore"), cat_atomic),
-            ("multilabel", MultiLabelBinarizerTransformer(),     cat_multi)
+            ("num",       "passthrough",                  num_cols),
+            ("onehot",    OneHotEncoder(handle_unknown="ignore"), cat_atomic),
+            ("multilabel", MultiLabelBinarizerTransformer(),      cat_multi),
         ], remainder="drop")
 
-        model = (RandomForestRegressor(random_state=42)
-                 if model_type == "RandomForest"
-                 else Ridge())
+        model = (
+            RandomForestRegressor(random_state=42)
+            if model_type=="RandomForest"
+            else Ridge()
+        )
 
         pipe = Pipeline([
             ("preproc", preprocessor),
             ("model",   model)
         ])
 
-        # 4) GridSearchCV 실행
+        # 4) GridSearchCV 실행 (실패 조합은 NaN 처리)
         with st.spinner("GridSearchCV 실행 중..."):
-            gs = GridSearchCV(pipe, param_grid, cv=3, n_jobs=-1, error_score=float("nan"))
+            gs = GridSearchCV(
+                pipe,
+                param_grid,
+                cv=3,
+                n_jobs=-1,
+                error_score=float("nan")
+            )
             gs.fit(X_train, y_train)
 
-        # 5) 결과 표시
+        # 5) 최적 파라미터 & 성능 표시
         st.subheader("최적 파라미터")
         st.json(gs.best_params_)
 
@@ -435,7 +450,7 @@ with tabs[7]:
         # 6) 테스트 세트 성능
         y_pred = gs.best_estimator_.predict(X_test)
         st.subheader("테스트 세트 성능")
-        st.metric("Test R²",  f"{r2_score(y_test, y_pred):.3f}")
+        st.metric("Test R²", f"{r2_score(y_test, y_pred):.3f}")
         st.metric("Test MSE", f"{mean_squared_error(y_test, y_pred):.3f}")
 
         st.subheader("실제 vs 예측 (상위 5개)")

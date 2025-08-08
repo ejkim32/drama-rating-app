@@ -14,6 +14,7 @@ from sklearn.preprocessing import OneHotEncoder, MultiLabelBinarizer
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import MultiLabelBinarizer
 import scipy.stats as stats
+from sklearn.ensemble      import RandomForestRegressor
 
 # 한글 폰트 설정 (Windows: Malgun Gothic, macOS/Linux는 적절한 한글 폰트로)
 # 1) 사용할 한글 폰트 이름 설정

@@ -34,6 +34,36 @@ class MultiLabelBinarizerTransformer(BaseEstimator, TransformerMixin):
     def transform(self, X):
         lists = X.squeeze()
         return self.mlb.transform(lists)
+def clean_cell(x):
+    if isinstance(x, list):
+        return x
+    elif pd.isna(x):
+        return []
+    elif isinstance(x, str):
+        try:
+            return ast.literal_eval(x)  # 문자열인 리스트 처리
+        except:
+            return [x.strip()]          # 그냥 문자열이면 리스트로 감싸기
+    else:
+        return [str(x)]
+
+mlb_cols = ['장르', '방영요일', '플랫폼']
+for col in mlb_cols:
+    # (2) 원본 컬럼을 리스트 형태로 정리
+    df[col] = df[col].apply(clean_cell)
+    # (3) 멀티라벨 바이너리 인코딩
+    mlb = MultiLabelBinarizer()
+    arr = mlb.fit_transform(df[col])
+    # (4) 새 컬럼명 생성
+    new_cols = [f"{col}_{c.strip().upper()}" for c in mlb.classes_]
+    # (5) 기존 동일 이름 컬럼(이전에 생성된 경우) 삭제
+    df.drop(columns=[c for c in new_cols if c in df.columns], inplace=True, errors='ignore')
+    # (6) DataFrame에 병합
+    df = pd.concat([df, pd.DataFrame(arr, columns=new_cols, index=df.index)], axis=1)
+
+# (7) 원본 다중값 컬럼은 이제 필요 없으면 삭제
+df.drop(columns=mlb_cols, inplace=True)
+
 
 # =========================
 # 0. 페이지 설정

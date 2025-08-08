@@ -397,6 +397,17 @@ with tabs[7]:
             ("preproc", preprocessor),
             ("model", model)
         ])
+
+        params = list(ParameterGrid(param_grid))[0]
+        st.write("Testing params:", params)
+
+        try:
+            pipe.set_params(**params)
+            pipe.fit(X_train, y_train)
+            st.success("이 조합은 성공했습니다!")
+        except Exception as e:
+            st.error("이 조합에서 오류 발생:")
+            st.text(str(e))
     
         # 4) GridSearchCV 실행
         with st.spinner("GridSearchCV 실행 중..."):

@@ -454,9 +454,7 @@ with tabs[7]:
     safe_feats   = [c for c in df.columns if c != "점수"]
     feature_cols = st.multiselect("튜닝할 특성 선택", safe_feats, key="tune_feats")
 
-    if not feature_cols:
-        st.warning("특성을 1개 이상 선택하세요.")
-    else:
+
         # 3) 데이터 분할
         X = df[feature_cols]
         y = df["점수"].astype(float)

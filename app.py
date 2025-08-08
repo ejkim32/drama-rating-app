@@ -110,6 +110,32 @@ week_list = [w for sub in weeks for w in sub]
 # 고유 장르 수
 unique_genres = set(genre_list)
 
+# =========================
+# 5. 사이드바: ML 파라미터 & 예측 입력
+# =========================
+with st.sidebar:
+    st.header("🤖 모델 설정")
+    model_type = st.selectbox('모델 선택', ['Random Forest', 'Linear Regression'])
+    test_size = st.slider('테스트셋 비율', 0.1, 0.5, 0.2, 0.05)
+    feature_cols = st.multiselect(
+        '특성 선택',
+        ['나이','방영년도','성별','장르','배우명','플랫폼','결혼여부'],
+        default=['나이','방영년도','장르']
+    )
+
+    st.markdown("---")
+    st.header("🎯 예상 평점 예측")
+    input_age     = st.number_input("배우 나이", 10, 80, 30)
+    input_year    = st.number_input("방영년도", 2000, 2025, 2021)
+    input_gender  = st.selectbox("성별", sorted(df['성별'].dropna().unique()))
+    genre_opts    = sorted(unique_genres)
+    default_genre = [genre_opts[0]] if genre_opts else []
+    input_genre   = st.multiselect("장르", genre_opts, default=default_genre)
+    platform_opts = sorted(set(broadcaster_list))
+    default_plat  = [platform_opts[0]] if platform_opts else []
+    input_plat    = st.multiselect("플랫폼", platform_opts, default=default_plat)
+    input_married = st.selectbox("결혼여부", sorted(df['결혼여부'].dropna().unique()))
+    predict_btn   = st.button("예측 실행")
     
 # =========================
 # 4. 본문: 탭으로 EDA & ML

@@ -238,25 +238,96 @@ with tabs[7]:
 # --- 4.9 예측 실행 ---
 with tabs[8]:
     st.header("평점 예측")
-    if predict_btn and feature_cols:
-        X_all = df[feature_cols].copy()
-        y_all = raw_df['점수'].astype(float)
+    st.subheader("1) 모델 설정")
+    model_type  = st.selectbox('모델 선택', ['Random Forest', 'Linear Regression'])
+    test_size   = st.slider('테스트셋 비율', 0.1, 0.5, 0.2, 0.05)
+    feature_cols = st.multiselect(
+        '특성 선택',
+        ['나이','방영년도','성별','장르','배우명','플랫폼','결혼여부'],
+        default=['나이','방영년도','장르']
+    )
+
+    st.markdown("---")
+    st.subheader("2) 예측 입력")
+    input_age     = st.number_input("배우 나이", 10, 80, 30)
+    input_year    = st.number_input("방영년도", 2000, 2025, 2021)
+    input_gender  = st.selectbox("성별", sorted(df['성별'].dropna().unique()))
+
+    genre_opts    = sorted(unique_genres)
+    default_genre = [genre_opts[0]] if genre_opts else []
+    input_genre   = st.multiselect("장르", genre_opts, default=default_genre)
+
+    platform_opts = sorted(set(broadcaster_list))
+    default_plat  = [platform_opts[0]] if platform_opts else []
+    input_plat    = st.multiselect("플랫폼", platform_opts, default=default_plat)
+
+    input_married = st.selectbox("결혼여부", sorted(df['결혼여부'].dropna().unique()))
+
+    predict_btn   = st.button("예측 실행")
+
+    if predict_btn:
+        # --- 1. 훈련 데이터 전처리 ---
+        X_all = raw_df[feature_cols].copy()
+        y_all = df['점수'].astype(float)
         X_all = preprocess_ml_features(X_all)
-        X_all = pd.get_dummies(X_all, drop_first=True)
-        user = pd.DataFrame([{
-            '나이':input_age,'방영년도':input_year,
-            '성별':input_gender,'장르':input_genre,
-            '배우명':raw_df['배우명'].dropna().iloc[0],
-            '플랫폼':input_plat,'결혼여부':input_married
+        X_all = pd.get_dummies(X_all, columns=[c for c in X_all.columns if X_all[c].dtype=='object'])
+
+        # --- 2. 입력 데이터 전처리 ---
+        user_df = pd.DataFrame([{
+            '나이': input_age,
+            '방영년도': input_year,
+            '성별': input_gender,
+            '장르': input_genre,
+            '배우명': df['배우명'].dropna().iloc[0],  # 필요시 selectbox로 변경
+            '플랫폼': input_plat,
+            '결혼여부': input_married
         }])
-        u = preprocess_ml_features(user)
-        u = pd.get_dummies(u, drop_first=True)
+        u = preprocess_ml_features(user_df)
+        u = pd.get_dummies(u, columns=[c for c in u.columns if u[c].dtype=='object'])
         for c in X_all.columns:
-            if c not in u.columns: u[c]=0
+            if c not in u.columns:
+                u[c] = 0
         u = u[X_all.columns]
-        mdl = RandomForestRegressor(random_state=42) if model_type=="Random Forest" else LinearRegression()
-        mdl.fit(X_all,y_all)
-        pred = mdl.predict(u)[0]
+
+        # --- 3. 모델 학습 & 예측 ---
+        model = RandomForestRegressor(n_estimators=100, random_state=42) \
+                if model_type=="Random Forest" else LinearRegression()
+        model.fit(X_all, y_all)
+        pred = model.predict(u)[0]
+
         st.success(f"💡 예상 평점: {pred:.2f}")
-    elif predict_btn:
-        st.error("특성을 먼저 선택하세요.")
+
+
+# =========================
+# 6. 예측 실행
+# =========================
+        if predict_btn:
+            user_input = pd.DataFrame([{
+                '나이': input_age,
+                '방영년도': input_year,
+                '성별': input_gender,
+                '장르': input_genre,
+                '배우명': st.selectbox("배우명", sorted(df['배우명'].dropna().unique())),  # 모델링 탭과 동일하게
+                '플랫폼': input_plat,
+                '결혼여부': input_married
+            }])
+        
+            # 전처리 & 인코딩
+            X_all = df[feature_cols].copy()
+            y_all = df['점수'].astype(float)
+            X_all = preprocess_ml_features(X_all)
+            X_all = pd.get_dummies(X_all, columns=[c for c in X_all.columns if X_all[c].dtype == 'object'])
+        
+            user_proc = preprocess_ml_features(user_input)
+            user_proc = pd.get_dummies(user_proc, columns=[c for c in user_proc.columns if user_proc[c].dtype == 'object'])
+            for col in X_all.columns:
+                if col not in user_proc.columns:
+                    user_proc[col] = 0
+            user_proc = user_proc[X_all.columns]
+        
+            # 모델 학습 & 예측
+            model = RandomForestRegressor(n_estimators=100, random_state=42) if model_type=="Random Forest" else LinearRegression()
+            model.fit(X_all, y_all)
+            prediction = model.predict(user_proc)[0]
+        
+            st.success(f"💡 예상 평점: {prediction:.2f}")

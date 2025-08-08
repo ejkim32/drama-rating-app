@@ -103,7 +103,7 @@ for col in mlb_cols:
         df,
         pd.DataFrame(arr, columns=[f"{col}_{c.upper()}" for c in mlb.classes_], index=df.index)
     ], axis=1)
-df.drop(columns=mlb_cols, inplace=True)
+#df.drop(columns=mlb_cols, inplace=True)
 
 # =========================
 # 3. EDA용 리스트 풀기

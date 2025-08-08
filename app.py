@@ -69,6 +69,9 @@ def load_data():
 df = load_data()
 
 mlb_cols = ['장르','플랫폼','방영요일']
+raw_genres    = df['장르'].copy()
+raw_platform = df['플랫폼'].copy()
+raw_weeks    = df['방영요일'].copy()
 for col in mlb_cols:
     df[col] = df[col].apply(clean_cell)            # 리스트로 정리
     mlb = MultiLabelBinarizer()
@@ -120,13 +123,13 @@ def preprocess_ml_features(X):
 # =========================
 # 3. 리스트형 컬럼 풀기 (EDA 탭용)
 # =========================
-genres = df['장르'].dropna().apply(safe_eval)
+genres = raw_genres.dropna().apply(safe_eval)
 genre_list = [g for sub in genres for g in sub]
 
-broadcasters = df['플랫폼'].dropna().apply(safe_eval)
+broadcasters = raw_platform.dropna().apply(safe_eval)
 broadcaster_list = [b for sub in broadcasters for b in sub]
 
-weeks = df['방영요일'].dropna().apply(safe_eval)
+weeks = raw_weeks.dropna().apply(safe_eval)
 week_list = [w for sub in weeks for w in sub]
 
 # 고유 장르 수

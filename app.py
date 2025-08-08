@@ -67,6 +67,7 @@ def load_data():
     return pd.DataFrame({col: pd.Series(vals) for col, vals in raw.items()})
 
 df = load_data()
+raw_df = df.copy()
 
 mlb_cols = ['장르','플랫폼','방영요일']
 raw_genres    = df['장르'].copy()
@@ -444,7 +445,7 @@ with tabs[6]:
         from sklearn.linear_model import LinearRegression
         from sklearn.metrics import r2_score, mean_squared_error
 
-        X = df[feature_cols].copy()
+        X = raw_df[feature_cols].copy()
         y = df['점수'].astype(float)
         X = preprocess_ml_features(X)
         X = pd.get_dummies(X, columns=[c for c in X.columns if X[c].dtype == 'object'])
@@ -502,7 +503,7 @@ with tabs[7]:
         st.warning("특성을 1개 이상 선택하세요.")
     else:
         # 3) 데이터 분할
-        X = df[feature_cols]
+        X = raw_df[feature_cols]
         y = df["점수"].astype(float)
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=42
@@ -710,7 +711,7 @@ with tabs[8]:
 
     if predict_btn:
         # --- 1. 훈련 데이터 전처리 ---
-        X_all = df[feature_cols].copy()
+        X_all = raw_df[feature_cols].copy()
         y_all = df['점수'].astype(float)
         X_all = preprocess_ml_features(X_all)
         X_all = pd.get_dummies(X_all, columns=[c for c in X_all.columns if X_all[c].dtype=='object'])

@@ -226,8 +226,8 @@ with tabs[2]:
     )
     fig3.update_yaxes(
     tickformat=".2f",   # 소수점 2자리까지 레이블
-    dtick=0.1,          # 0.1 단위 눈금
-    showgrid=True,      # 그리드 켜기
+    dtick=0.5,          # 0.1 단위 눈금
+    showgrid=False,      # 그리드 켜기
     gridcolor="LightGray",
     gridwidth=1
     )

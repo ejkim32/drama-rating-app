@@ -5,7 +5,7 @@ from wordcloud import WordCloud
 import ast
 import matplotlib
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import FunctionTransformer
+from sklearn.preprocessing import FunctionTransformer,PolynomialFeatures, StandardScaler
 from sklearn.metrics import r2_score, mean_squared_error
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import train_test_split, GridSearchCV, ParameterGrid, RandomizedSearchCV
@@ -55,6 +55,15 @@ def load_data():
     return pd.DataFrame({col: pd.Series(vals) for col, vals in raw.items()})
 
 df = load_data()
+
+mlb_cols = ['장르','플랫폼','방영요일']
+for col in mlb_cols:
+    df[col] = df[col].apply(clean_cell)            # 리스트로 정리
+    mlb = MultiLabelBinarizer()
+    arr = mlb.fit_transform(df[col])
+    new_cols = [f"{col}_{c.upper()}" for c in mlb.classes_]
+    df = pd.concat([df, pd.DataFrame(arr, columns=new_cols, index=df.index)], axis=1)
+df.drop(columns=mlb_cols, inplace=True)
 
 # =========================
 # 2. 전처리 함수
@@ -421,13 +430,12 @@ with tabs[7]:
         "KNN", "LinearRegression", "Ridge", "Lasso",
         "ElasticNet", "SGDRegressor", "SVR",
         "DecisionTree", "RandomForest", "XGBRegressor"
-    ])
+    ], key="tune_model")
 
     # 2) 공통 파라미터 입력
     test_size = st.slider("테스트셋 비율", 0.1, 0.5, 0.2, 0.05)
-    feature_cols = st.multiselect(
-        "특성 선택", df.columns.drop("점수"), default=["나이","방영년도","역할","성별","결혼여부","연령대","장르","방영요일"]
-    )
+    safe_feats = [c for c in df.columns if c not in ['점수']]
+    feature_cols = st.multiselect("튜닝할 특성 선택", safe_feats, key="tune_feats")
 
     if not feature_cols:
         st.warning("특성을 1개 이상 선택하세요.")

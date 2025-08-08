@@ -401,7 +401,7 @@ with tabs[7]:
         with st.spinner("랜덤 탐색 중..."):
             rs = RandomizedSearchCV(pipe, param_dist,
                                     n_iter=n_iter, cv=3, n_jobs=-1,
-                                    random_state=42, error_score=np.nan)
+                                    random_state=42, error_score=float("nan"))
             rs.fit(X_train, y_train)
 
         st.subheader("최적 파라미터")

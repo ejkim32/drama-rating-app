@@ -293,6 +293,60 @@ with tabs[2]:
                    log_y=True, title="연도별 주요 플랫폼 작품 수")
     st.plotly_chart(fig3, use_container_width=True)
 
+    # ---------- 자동 인사이트 ----------
+    import numpy as np
+    
+    # 연-플랫폼 피벗
+    p = (ct.pivot_table(index='방영년도', columns='플랫폼_up', values='count', aggfunc='sum')
+           .fillna(0).astype(int))
+    years = sorted(p.index)
+    
+    insights = []
+    
+    # 1) Netflix 급성장
+    if 'NETFLIX' in p.columns:
+        s = p['NETFLIX']
+        nz = s[s > 0]
+        if not nz.empty:
+            first_year = int(nz.index.min())
+            max_year, max_val = int(s.idxmax()), int(s.max())
+            txt = f"- **넷플릭스(OTT)의 급성장**: {first_year}년 이후 빠르게 증가, **{max_year}년 {max_val}편**으로 최고치."
+            # 2020년 비교
+            if 2020 in p.index:
+                comps = ", ".join([f"{b} {int(p.loc[2020,b])}편"
+                                   for b in ['KBS','MBC','SBS'] if b in p.columns])
+                txt += f" 2020년에는 넷플릭스 {int(p.loc[2020,'NETFLIX'])}편, 지상파({comps})와 유사한 수준."
+            insights.append(txt)
+    
+    # 2) 지상파 감소 추세
+    down_ter = []
+    for b in ['KBS','MBC','SBS']:
+        if b in p.columns and len(years) >= 2:
+            slope = np.polyfit(years, p[b].reindex(years, fill_value=0), 1)[0]
+            if slope < 0:
+                down_ter.append(b)
+    if down_ter:
+        insights.append(f"- **지상파의 지속적 감소**: {' / '.join(down_ter)} 등 전통 3사의 작품 수가 전반적으로 하락 추세.")
+    
+    # 3) tvN 성장과 정체
+    if 'TVN' in p.columns:
+        tvn = p['TVN']
+        peak_year, peak_val = int(tvn.idxmax()), int(tvn.max())
+        tail = []
+        for y in [y for y in [2020, 2021, 2022] if y in tvn.index]:
+            tail.append(f"{y}년 {int(tvn.loc[y])}편")
+        insights.append(f"- **tvN의 성장과 정체**: 최고 {peak_year}년 {peak_val}편. 최근 수년({', '.join(tail)})은 정체/소폭 감소 경향.")
+    
+    # 4) 2022년 전년 대비 감소
+    if 2021 in p.index and 2022 in p.index:
+        downs = [c for c in p.columns if p.loc[2022, c] < p.loc[2021, c]]
+        if downs:
+            insights.append(f"- **2022년 전년 대비 감소**: {', '.join(downs)} 등 여러 플랫폼이 2021년보다 줄어듦.")
+    
+    # 출력
+    st.markdown("**인사이트**\n" + "\n".join(insights) +
+                "\n\n*해석 메모: OTT-방송사 동시방영, 제작환경(예산/시청률), 코로나19 등 외부 요인이 영향을 준 것으로 해석 가능.*")
+
     # --- 장르 '개수'별 배우 평균 평점 (1~2 / 3~4 / 5~6 / 7+) ---
     st.subheader("장르 개수별 평균 평점 (배우 단위, 1 ~ 2 / 3 ~ 4 / 5 ~ 6 / 7+)")
     

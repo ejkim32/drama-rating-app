@@ -18,6 +18,12 @@ from xgboost import XGBRegressor
 from sklearn.linear_model import LinearRegression
 import plotly.express as px
 
+if st.session_state.get("font_cache_cleared") is not True:
+    import shutil
+    cache_dir = matplotlib.get_cachedir()
+    shutil.rmtree(cache_dir, ignore_errors=True)
+    st.session_state["font_cache_cleared"] = True
+
 def set_korean_font():
     matplotlib.rcParams['axes.unicode_minus'] = False
 

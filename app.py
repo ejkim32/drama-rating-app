@@ -294,7 +294,7 @@ with tabs[2]:
     st.plotly_chart(fig3, use_container_width=True)
 
     # --- 장르 '개수'별 배우 평균 평점 (1~2 / 3~4 / 5~6 / 7+) ---
-    st.subheader("장르 개수별 평균 평점 (배우 단위, 1~2 / 3~4 / 5~6 / 7+)")
+    st.subheader("장르 개수별 평균 평점 (배우 단위, 1 ~ 2 / 3 ~ 4 / 5 ~ 6 / 7+)")
     
     # 1) 배우별 고유 장르 개수
     gdf = (

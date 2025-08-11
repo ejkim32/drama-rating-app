@@ -247,6 +247,67 @@ with tabs[2]:
     ax.grid(axis='y', linestyle='--', alpha=0.5)
 
     st.pyplot(fig)
+    st.subheader("장르별 작품 수 및 평균 점수")
+
+    # 한글 폰트(Windows) + 마이너스 깨짐 방지
+    import matplotlib, platform
+    if platform.system() == "Windows":
+        matplotlib.rcParams["font.family"] = "Malgun Gothic"
+    matplotlib.rcParams["axes.unicode_minus"] = False
+
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import numpy as np
+    import pandas as pd
+
+    # 장르가 리스트인 경우 펼치기 + 결측 제거
+    df_exploded = raw_df.explode('장르')
+    df_exploded = df_exploded.dropna(subset=['장르', '점수'])
+
+    # 장르별 평균 점수 및 작품 수
+    genre_score = df_exploded.groupby('장르')['점수'].mean().round(3)
+    genre_count = df_exploded['장르'].value_counts()
+
+    genre_df = (pd.DataFrame({'평균 점수': genre_score, '작품 수': genre_count})
+                .reset_index().rename(columns={'index': '장르'}))
+
+    # 보기 좋게 작품 수 기준 정렬
+    genre_df = genre_df.sort_values('작품 수', ascending=False).reset_index(drop=True)
+
+    # 시각화
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+
+    # 막대그래프: 작품 수
+    bars = ax1.bar(range(len(genre_df)), genre_df['작품 수'], color='lightgray')
+    ax1.set_ylabel('작품 수', fontsize=12)
+    ax1.set_xticks(range(len(genre_df)))
+    ax1.set_xticklabels(genre_df['장르'], rotation=45, ha='right')
+
+    # 막대 위 수치
+    for i, rect in enumerate(bars):
+        h = rect.get_height()
+        ax1.text(i, h + max(2, h*0.01), f'{int(h)}',
+                 ha='center', va='bottom', fontsize=10, fontweight='bold', color='#444')
+
+    # 선그래프: 평균 점수(보조축)
+    ax2 = ax1.twinx()
+    sns.lineplot(x=range(len(genre_df)), y=genre_df['평균 점수'],
+                 marker='o', linewidth=2, ax=ax2)
+    ax2.set_ylabel('평균 점수', fontsize=12)
+    ax2.tick_params(axis='y')
+    ax2.set_ylim(genre_df['평균 점수'].min() - 0.1, genre_df['평균 점수'].max() + 0.1)
+
+    # 점 위 수치
+    for i, v in enumerate(genre_df['평균 점수']):
+        ax2.text(i, v + 0.01, f'{v:.3f}',
+                 ha='center', va='bottom', fontsize=10, fontweight='bold')
+
+    plt.title('장르별 작품 수 및 평균 점수', fontsize=14)
+    ax1.set_xlabel('장르', fontsize=12)
+    ax1.grid(axis='y', linestyle='--', alpha=0.5)
+    plt.tight_layout()
+
+    st.pyplot(fig)
 
 
 

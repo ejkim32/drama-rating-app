@@ -553,36 +553,34 @@ with tabs[8]:
     col_left, col_right = st.columns(2)
 
     with col_left:
-        st.markdown("**① 배우 특성**")
+        st.markdown("**① 컨텐츠 특성**")
         input_age     = st.number_input("나이", 10, 80, 30)
         input_gender  = st.selectbox("성별", gender_opts) if gender_opts else st.text_input("성별 입력", "")
         input_role    = st.selectbox("역할", role_opts) if role_opts else st.text_input("역할 입력", "")
         input_married = st.selectbox("결혼여부", married_opts) if married_opts else st.text_input("결혼여부 입력", "")
-
-        # 나이 → 연령대 자동 산출
-        derived_age_group = age_to_age_group(int(input_age))
-        st.caption(f"자동 계산된 연령대: **{derived_age_group}**")
-
-    with col_right:
-        st.markdown("**② 작품/편성 특성**")
-        input_quarter = st.selectbox("방영분기", quarter_opts) if quarter_opts else st.text_input("방영분기 입력", "")
         input_genre   = st.multiselect("장르 (멀티 선택)", genre_opts, default=genre_opts[:1] if genre_opts else [])
-        input_week    = st.multiselect("방영요일 (멀티 선택)", week_opts, default=week_opts[:1] if week_opts else [])
-        input_plat    = st.multiselect("플랫폼 (멀티 선택)", plat_opts, default=plat_opts[:1] if plat_opts else [])
 
-        # 장르 개수로 장르구분 생성
+        # 나이 → 연령대 자동 산출 + 장르구분 생성
+        derived_age_group = age_to_age_group(int(input_age))
         if len(input_genre) == 0:
             genre_group_label = "장르없음"
         elif len(input_genre) == 1:
             genre_group_label = "단일장르"
         else:
             genre_group_label = "멀티장르"
-        st.caption(f"장르구분: **{genre_group_label}**")
+
+        st.caption(f"자동 연령대: **{derived_age_group}**  |  장르구분: **{genre_group_label}**")
+
+    with col_right:
+        st.markdown("**② 편성 특성**")
+        input_quarter = st.selectbox("방영분기", quarter_opts) if quarter_opts else st.text_input("방영분기 입력", "")
+        input_week    = st.multiselect("방영요일 (멀티 선택)", week_opts, default=week_opts[:1] if week_opts else [])
+        input_plat    = st.multiselect("플랫폼 (멀티 선택)", plat_opts, default=plat_opts[:1] if plat_opts else [])
 
     predict_btn = st.button("예측 실행")
 
     if predict_btn:
-        # 1) 사용할 모델 결정: 베스트 있으면 clone해서 전체 데이터로 재학습
+        # 1) 예측 모델: 베스트 있으면 clone해서 전체 데이터로 재학습
         if "best_estimator" in st.session_state:
             model_full = clone(st.session_state["best_estimator"])
             st.caption(f"예측 모델: GridSearch 베스트 재학습 사용 ({st.session_state.get('best_name')})")

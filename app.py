@@ -282,29 +282,7 @@ with tabs[1]:
 # --- 4.3 분포/교차분석 ---
 with tabs[2]:
     st.header("분포 및 교차분석")
-    st.subheader("Top 10 평점 작품 (드라마 단위)")
-
-    # 점수 숫자형 + 결측 제거
-    tmp = raw_df[['드라마명','점수']].copy()
-    tmp['점수'] = pd.to_numeric(tmp['점수'], errors='coerce')
-    tmp = tmp.dropna()
-    
-    # ① 드라마별 평균 점수(또는 .max() 써도 됨)
-    by_title = tmp.groupby('드라마명', as_index=False)['점수'].mean()
-    
-    # ② 상위 10개(오름차순으로 그리기)
-    top10 = by_title.nlargest(10, '점수').sort_values('점수')
-    
-    fig2 = px.bar(
-        top10, x='점수', y='드라마명',
-        orientation='h', text='점수',
-        title="Top 10 평점 작품"
-    )
-    fig2.update_traces(texttemplate='%{text:.2f}', textposition='outside')
-    fig2.update_layout(yaxis={'categoryorder': 'total ascending'})
-    st.plotly_chart(fig2, use_container_width=True)
-
-    st.subheader("연도별 주요 플랫폼 작품 수 (로그 스케일)")
+    st.subheader("연도별 주요 플랫폼 작품 수")
     ct = (
         pd.DataFrame({'방영년도': raw_df['방영년도'], '플랫폼': raw_df['플랫폼'].apply(clean_cell_colab)})
         .explode('플랫폼').groupby(['방영년도','플랫폼']).size().reset_index(name='count')

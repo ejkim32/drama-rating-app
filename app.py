@@ -365,6 +365,98 @@ with tabs[2]:
     ax1.set_xticks(ordered); ax1.set_xticklabels([day_ko[d] for d in ordered])
     plt.title('방영 요일별 작품 수 및 평균 점수 (월요일 → 일요일 순)'); plt.tight_layout(); st.pyplot(fig)
 
+    # --- 주연 배우 성별 인원수 및 비율 ---
+    st.subheader("주연 배우 성별 인원수 및 비율")
+
+    # '주연'만 필터 + 성별 결측 제거
+    main_roles = raw_df[raw_df['역할'] == '주연'].dropna(subset=['성별']).copy()
+    
+    # 성별별 인원수 / 확률
+    gender_counts = main_roles['성별'].value_counts()
+    total_main_roles = int(gender_counts.sum())
+    gender_probs = (gender_counts / total_main_roles).reindex(gender_counts.index)
+    
+    # 색상(성별 개수에 맞춰 반복)
+    palette = ['skyblue', 'lightpink', 'lightgreen', 'lightgray', 'orange', 'violet']
+    colors = [palette[i % len(palette)] for i in range(len(gender_counts))]
+    
+    # 그래프
+    fig, ax = plt.subplots(figsize=(6, 6))
+    bars = ax.bar(gender_counts.index.astype(str), gender_counts.values, color=colors)
+    
+    # 라벨: 인원수 + 확률(%) 표기
+    for bar, prob in zip(bars, gender_probs.values):
+        yval = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width()/2, yval + max(2, yval*0.02),
+            f'{int(yval)}명\n({prob*100:.2f}%)',
+            ha='center', va='bottom', fontsize=11, fontweight='bold'
+        )
+    
+    ax.set_title('주연 배우 성별 인원수 및 비율', fontsize=14)
+    ax.set_ylabel('인원수'); ax.set_xlabel('성별')
+    
+    # 여유 공백
+    ymax = gender_counts.max()
+    ax.set_ylim(0, ymax + max(10, int(ymax*0.15)))
+    
+    ax.grid(axis='y', linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    st.pyplot(fig)
+
+    # --- 방영년도별 작품 수 및 평균 점수 ---
+    st.subheader("방영년도별 작품 수 및 평균 점수")
+    
+    # 숫자형 변환 & 결측 제거
+    dfe = raw_df.copy()
+    dfe['방영년도'] = pd.to_numeric(dfe['방영년도'], errors='coerce')
+    dfe['점수']    = pd.to_numeric(dfe['점수'], errors='coerce')
+    dfe = dfe.dropna(subset=['방영년도','점수']).copy()
+    dfe['방영년도'] = dfe['방영년도'].astype(int)
+    
+    # 집계
+    mean_score_by_year = dfe.groupby('방영년도')['점수'].mean().round(3)
+    count_by_year      = dfe['방영년도'].value_counts()
+    
+    # x축 연도(둘의 합집합, 오름차순)
+    years = sorted(set(mean_score_by_year.index) | set(count_by_year.index))
+    mean_s = mean_score_by_year.reindex(years)
+    count_s = count_by_year.reindex(years, fill_value=0)
+    
+    # 시각화
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+    
+    # 왼쪽 Y축: 작품 수 (막대)
+    color_bar = 'tab:gray'
+    ax1.set_xlabel('방영년도')
+    ax1.set_ylabel('작품 수', color=color_bar)
+    bars = ax1.bar(years, count_s.values, alpha=0.3, color=color_bar, width=0.6)
+    ax1.tick_params(axis='y', labelcolor=color_bar)
+    
+    # 막대 위 수치
+    for bar in bars:
+        h = bar.get_height()
+        ax1.text(bar.get_x() + bar.get_width()/2, h + max(0.5, h*0.02),
+                 f'{int(h)}', ha='center', va='bottom', fontsize=9, color='black')
+    
+    # 오른쪽 Y축: 평균 점수 (선)
+    ax2 = ax1.twinx()
+    color_line = 'tab:blue'
+    ax2.set_ylabel('평균 점수', color=color_line)
+    ax2.plot(years, mean_s.values, marker='o', color=color_line)
+    ax2.tick_params(axis='y', labelcolor=color_line)
+    if mean_s.notna().any():
+        ax2.set_ylim(mean_s.min() - 0.05, mean_s.max() + 0.05)
+    
+    # 점 위 수치
+    for x, y in zip(years, mean_s.values):
+        if pd.notna(y):
+            ax2.text(x, y + 0.01, f'{y:.3f}', color=color_line, fontsize=9, ha='center')
+    
+    plt.title('방영년도별 작품 수 및 평균 점수')
+    plt.tight_layout()
+    st.pyplot(fig)
+
 # --- 4.4 워드클라우드 ---
 from wordcloud import WordCloud
 with tabs[3]:

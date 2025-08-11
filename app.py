@@ -332,7 +332,7 @@ with tabs[2]:
     fig_box = px.box(
         df_actor, x='장르개수구간', y='배우평균점수',
         category_orders={'장르개수구간': order_bins},
-        title="장르 개수별 배우 평균 점수 분포 (1~2 / 3~4 / 5~6 / 7+)"
+        title="장르 개수별 배우 평균 점수 분포 (1 ~ 2 / 3 ~ 4 / 5 ~ 6 / 7+)"
     )
     st.plotly_chart(fig_box, use_container_width=True)
     

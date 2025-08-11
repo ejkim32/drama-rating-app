@@ -293,13 +293,15 @@ with tabs[2]:
                    log_y=True, title="연도별 주요 플랫폼 작품 수")
     st.plotly_chart(fig3, use_container_width=True)
 
-        # --- 장르 '개수'별 배우 평균 평점 (1/2/3/4/5+) ---
-    st.subheader("장르 개수별 평균 평점 (배우 단위, 1/2/3/4/5+)")
+    # --- 장르 '개수'별 배우 평균 평점 (1~2 / 3~4 / 5~6 / 7+) ---
+    st.subheader("장르 개수별 평균 평점 (배우 단위, 1~2 / 3~4 / 5~6 / 7+)")
     
     # 1) 배우별 고유 장르 개수
     gdf = (
-        pd.DataFrame({'배우명': raw_df['배우명'],
-                      '장르':  raw_df['장르'].apply(clean_cell_colab)})
+        pd.DataFrame({
+            '배우명': raw_df['배우명'],
+            '장르' :  raw_df['장르'].apply(clean_cell_colab)
+        })
         .explode('장르')
         .dropna(subset=['배우명','장르'])
     )
@@ -310,16 +312,19 @@ with tabs[2]:
                   .mean()
                   .rename(columns={'점수':'배우평균점수'}))
     
-    # 3) 병합 + 구간화(1,2,3,4,5+)
+    # 3) 병합 + 구간화(1~2, 3~4, 5~6, 7+)
     df_actor = actor_mean.merge(genre_cnt.reset_index(), on='배우명', how='left')
     df_actor['장르개수'] = df_actor['장르개수'].fillna(0).astype(int)
-    df_actor = df_actor[df_actor['장르개수'] > 0].copy()  # 장르정보 없는 배우는 제외
+    df_actor = df_actor[df_actor['장르개수'] > 0].copy()  # 장르정보 없는 배우 제외
     
     def bucket(n: int) -> str:
-        return '5개 이상' if n >= 5 else f'{n}개'
+        if n <= 2:  return '1~2개'
+        if n <= 4:  return '3~4개'
+        if n <= 6:  return '5~6개'
+        return '7개 이상'
     
     df_actor['장르개수구간'] = df_actor['장르개수'].apply(bucket)
-    order_bins = ['1개','2개','3개','4개','5개 이상']
+    order_bins = ['1~2개','3~4개','5~6개','7개 이상']
     df_actor['장르개수구간'] = pd.Categorical(df_actor['장르개수구간'],
                                           categories=order_bins, ordered=True)
     
@@ -327,7 +332,7 @@ with tabs[2]:
     fig_box = px.box(
         df_actor, x='장르개수구간', y='배우평균점수',
         category_orders={'장르개수구간': order_bins},
-        title="장르 개수별 배우 평균 점수 분포 (1/2/3/4/5+)"
+        title="장르 개수별 배우 평균 점수 분포 (1~2 / 3~4 / 5~6 / 7+)"
     )
     st.plotly_chart(fig_box, use_container_width=True)
     
@@ -339,11 +344,11 @@ with tabs[2]:
              .round(3))
     
     if not stats.empty and stats['표본수'].sum() > 0:
-        # 가장 높은 그룹
+        # 최고 그룹
         best_mean_grp   = stats['평균'].idxmax()
         best_median_grp = stats['중앙값'].idxmax()
     
-        # 단조 경향(평균 기준): 증가/감소/혼합
+        # 단조 경향(평균 기준)
         vals = stats['평균'].dropna().values
         diffs = pd.Series(vals).diff().dropna()
         if (diffs >= 0).all():
@@ -353,19 +358,22 @@ with tabs[2]:
         else:
             trend = "장르 수와 평균 평점 간 **일관된 단조 경향은 약함**"
     
-        # 1개 vs 5개 이상 비교(있을 때만)
+        # 1~2개 vs 7개 이상 비교(둘 다 있을 때만)
         comp_txt = ""
-        if {'1개','5개 이상'}.issubset(stats.index):
-            diff_mean = stats.loc['1개','평균'] - stats.loc['5개 이상','평균']
-            diff_med  = stats.loc['1개','중앙값'] - stats.loc['5개 이상','중앙값']
+        if {'1~2개','7개 이상'}.issubset(stats.index):
+            diff_mean = stats.loc['1~2개','평균'] - stats.loc['7개 이상','평균']
+            diff_med  = stats.loc['1~2개','중앙값'] - stats.loc['7개 이상','중앙값']
             sign = "높음" if diff_mean >= 0 else "낮음"
-            comp_txt = f"- **1개 vs 5개 이상**: 평균 {abs(diff_mean):.3f}p {sign}, 중앙값 차이 {abs(diff_med):.3f}p\n"
+            comp_txt = f"- **1~2개 vs 7개 이상**: 평균 {abs(diff_mean):.3f}p {sign}, 중앙값 차이 {abs(diff_med):.3f}p\n"
+    
+        st.markdown("**요약 통계(배우 단위)**")
+        try:
+            st.markdown(stats.to_markdown())
+        except Exception:
+            st.dataframe(stats.reset_index(), use_container_width=True)
     
         st.markdown(
             f"""
-    **요약 통계(배우 단위)**  
-    {stats.to_markdown()}
-    
     **인사이트**
     - 평균 기준 최고 그룹: **{best_mean_grp}** / 중앙값 기준 최고 그룹: **{best_median_grp}**  
     - {trend}  

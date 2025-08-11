@@ -309,6 +309,67 @@ with tabs[2]:
 
     st.pyplot(fig)
 
+    st.subheader("방영 요일별 작품 수 및 평균 점수 (월→일)")
+
+    import matplotlib.pyplot as plt
+    import pandas as pd
+
+    # 1) 데이터 전처리
+    df_exploded = raw_df.explode('방영요일').dropna(subset=['방영요일', '점수']).copy()
+    df_exploded['방영요일'] = df_exploded['방영요일'].astype(str).str.strip().str.lower()
+
+    ordered_days_en = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
+    day_label_ko = {
+        'monday':'월', 'tuesday':'화', 'wednesday':'수', 'thursday':'목',
+        'friday':'금', 'saturday':'토', 'sunday':'일'
+    }
+
+    # 2) 집계 (없 는 요일은 0/NaN 처리 후 정렬)
+    mean_score_by_day = (
+        df_exploded.groupby('방영요일')['점수'].mean()
+        .reindex(ordered_days_en)
+    )
+    count_by_day = (
+        df_exploded['방영요일'].value_counts()
+        .reindex(ordered_days_en)
+        .fillna(0).astype(int)
+    )
+
+    # 3) 시각화
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+
+    # 왼쪽 Y축: 작품 수(막대)
+    bars = ax1.bar(ordered_days_en, count_by_day.values, alpha=0.3, color='tab:gray')
+    ax1.set_ylabel('작품 수', color='tab:gray', fontsize=12)
+    ax1.tick_params(axis='y', labelcolor='tab:gray')
+
+    # 막대 위 수치
+    for bar in bars:
+        h = bar.get_height()
+        ax1.text(bar.get_x() + bar.get_width()/2, h + 0.5, f'{int(h)}',
+                 ha='center', va='bottom', fontsize=9, color='black')
+
+    # 오른쪽 Y축: 평균 점수(선)
+    ax2 = ax1.twinx()
+    ax2.plot(ordered_days_en, mean_score_by_day.values, marker='o', color='tab:blue')
+    ax2.set_ylabel('평균 점수', color='tab:blue', fontsize=12)
+    ax2.tick_params(axis='y', labelcolor='tab:blue')
+    if mean_score_by_day.notna().any():
+        ax2.set_ylim(mean_score_by_day.min() - 0.05, mean_score_by_day.max() + 0.05)
+
+    # 점 위 수치
+    for x, y in zip(ordered_days_en, mean_score_by_day.values):
+        if pd.notna(y):
+            ax2.text(x, y + 0.005, f'{y:.3f}', color='tab:blue', fontsize=9, ha='center')
+
+    # x축 한글 레이블
+    ax1.set_xticks(ordered_days_en)
+    ax1.set_xticklabels([day_label_ko[d] for d in ordered_days_en])
+
+    plt.title('방영 요일별 작품 수 및 평균 점수 (월요일 → 일요일 순)', fontsize=14)
+    plt.tight_layout()
+    st.pyplot(fig)
+
 
 
 # --- 4.4 워드클라우드 ---

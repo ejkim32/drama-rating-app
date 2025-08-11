@@ -9,6 +9,11 @@ import platform
 from sklearn.metrics import mean_squared_error
 import streamlit as st
 import plotly.express as px
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet, SGDRegressor
+from sklearn.svm import SVR
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 
 #XGB가 설치돼 있으면 쓰도록 안전하게 추가
 try:

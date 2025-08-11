@@ -184,12 +184,22 @@ with tabs[2]:
     fig2 = px.bar(top10, x='점수', y='드라마명', orientation='h', text='점수'); st.plotly_chart(fig2)
     # 2) 연도별 플랫폼 수(원본 explode)
     st.subheader("연도별 주요 플랫폼 작품 수")
-    ct = (pd.DataFrame({'방영년도':raw_df['방영년도'],'플랫폼':raw_df['플랫폼']})
-          .explode('플랫폼')
-          .groupby(['방영년도','플랫폼']).size().reset_index(name='count'))
-    ct['플랫폼_up']=ct['플랫폼'].str.upper()
-    focus = ['KBS','MBC','TVN','NETFLIX','SBS']
-    fig3=px.line(ct[ct['플랫폼_up'].isin(focus)], x='방영년도',y='count',color='플랫폼'); st.plotly_chart(fig3)
+    ct = (
+        pd.DataFrame({'방영년도': raw_df['방영년도'], '플랫폼': raw_df['플랫폼']})
+        .explode('플랫폼')
+        .groupby(['방영년도', '플랫폼']).size().reset_index(name='count'))
+    ct['플랫폼_up'] = ct['플랫폼'].str.upper()
+    focus = ['KBS', 'MBC', 'TVN', 'NETFLIX', 'SBS']
+
+    fig3 = px.line(
+        ct[ct['플랫폼_up'].isin(focus)],
+        x='방영년도',
+        y='count',
+        color='플랫폼',
+        log_y=True,  # y축 로그 스케일 적용
+        title="연도별 주요 플랫폼 작품 수 (로그 스케일)")
+    st.plotly_chart(fig3)
+
     # 3) 멀티장르 vs 단일장르
     st.subheader("멀티장르 vs 단일장르 평균 평점")
     ag = (pd.DataFrame({'배우명':raw_df['배우명'],'장르':raw_df['장르']})

@@ -452,42 +452,90 @@ with tabs[2]:
     plt.tight_layout()
     st.pyplot(fig)
 
-    # --- 분기별 평점 분포 (Boxplot) & 평균 테이블 ---
-    st.subheader("분기별 드라마 평점 분포 (Boxplot)")
+    # --- 연령대별 작품 수 & 성별 평균 점수 (주연 배우 기준) ---
+    st.subheader("연령대별 작품 수 및 성별 평균 점수 (주연 배우 기준)")
     
     import re
+    import numpy as np
     
-    # 준비: 숫자형 변환 & 결측 제거
-    dfe = raw_df[['방영분기','점수']].copy()
-    dfe['점수'] = pd.to_numeric(dfe['점수'], errors='coerce')
-    dfe = dfe.dropna(subset=['방영분기','점수'])
+    # 1) 데이터 준비: 주연만, 필요한 컬럼 결측 제거
+    main_roles = raw_df.copy()
+    main_roles = main_roles[main_roles['역할'] == '주연']
+    main_roles = main_roles.dropna(subset=['연령대','성별','점수']).copy()
+    main_roles['점수'] = pd.to_numeric(main_roles['점수'], errors='coerce')
+    main_roles = main_roles.dropna(subset=['점수'])
     
-    # 분기 순서 정렬 함수 (예: '1분기' → 1, 'Q2' → 2)
-    def q_key(x: str):
-        m = re.search(r'(\d+)', str(x))
+    # 2) 연령대 정렬 키 (예: '20대 후반'도 20으로 인식, '50대 이상'은 50)
+    def age_key(s: str):
+        m = re.search(r'(\d+)', str(s))
         return int(m.group(1)) if m else 999
     
-    quarters = sorted(dfe['방영분기'].astype(str).unique(), key=q_key)
+    age_order = sorted(main_roles['연령대'].astype(str).unique(), key=age_key)
     
-    # Boxplot (seaborn 우선, 없으면 matplotlib로 폴백)
-    fig, ax = plt.subplots(figsize=(7, 4))
-    try:
-        import seaborn as sns
-        sns.boxplot(data=dfe, x='방영분기', y='점수', order=quarters, ax=ax)
-    except Exception:
-        data_by_q = [dfe.loc[dfe['방영분기'].astype(str)==q, '점수'].values for q in quarters]
-        ax.boxplot(data_by_q, labels=quarters, patch_artist=True)
+    # 3) 연령대별 작품 수
+    age_counts = (main_roles['연령대']
+                  .value_counts()
+                  .reindex(age_order)
+                  .fillna(0)
+                  .astype(int))
     
-    ax.set_title('분기별 드라마 평점 분포')
-    ax.set_xlabel('방영분기')
-    ax.set_ylabel('점수')
+    # 4) 성별+연령대별 평균 점수
+    ga = (main_roles.groupby(['성별','연령대'])['점수']
+          .mean()
+          .round(3)
+          .reset_index())
+    
+    male_vals   = ga[ga['성별']=='남자'].set_index('연령대').reindex(age_order)['점수']
+    female_vals = ga[ga['성별']=='여자'].set_index('연령대').reindex(age_order)['점수']
+    
+    # 5) 시각화
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    
+    # 막대: 작품 수
+    bars = ax1.bar(age_order, age_counts.values, color='lightgray', label='작품 수')
+    ax1.set_ylabel('작품 수', fontsize=12)
+    ax1.set_ylim(0, max(age_counts.max()*1.2, age_counts.max()+2))
+    
+    # 막대 위 수치
+    for rect in bars:
+        h = rect.get_height()
+        ax1.text(rect.get_x()+rect.get_width()/2, h + max(2, h*0.02),
+                 f'{int(h)}', ha='center', va='bottom', fontsize=10, fontweight='bold')
+    
+    # 선: 평균 점수(이중축)
+    ax2 = ax1.twinx()
+    line1, = ax2.plot(age_order, male_vals.values, marker='o', linewidth=2, label='남자')
+    line2, = ax2.plot(age_order, female_vals.values, marker='o', linewidth=2, label='여자')
+    ax2.set_ylabel('평균 점수', fontsize=12)
+    
+    # y축 범위(데이터 기반)
+    all_means = pd.concat([male_vals, female_vals]).dropna()
+    if not all_means.empty:
+        ymin = float(all_means.min()) - 0.05
+        ymax = float(all_means.max()) + 0.05
+        if ymin == ymax:  # 동일값 보호
+            ymin, ymax = ymin-0.05, ymax+0.05
+        ax2.set_ylim(ymin, ymax)
+    
+    # 점 위 수치
+    for x, y in zip(age_order, male_vals.values):
+        if not np.isnan(y):
+            ax2.text(x, y + 0.004, f'{y:.3f}', color=line1.get_color(),
+                     ha='center', va='bottom', fontsize=10, fontweight='bold')
+    for x, y in zip(age_order, female_vals.values):
+        if not np.isnan(y):
+            ax2.text(x, y + 0.004, f'{y:.3f}', color=line2.get_color(),
+                     ha='center', va='bottom', fontsize=10, fontweight='bold')
+    
+    # 제목/격자/범례
+    plt.title('연령대별 작품 수 및 성별 평균 점수 (주연 배우 기준)', fontsize=14)
+    ax1.set_xlabel('연령대', fontsize=12)
+    ax1.grid(axis='y', linestyle='--', alpha=0.4)
+    lines, labels = [bars, line1, line2], ['작품 수', '남자', '여자']
+    ax1.legend(lines[1:], labels[1:], loc='upper left')  # 선만 범례로 표시
+    
     plt.tight_layout()
     st.pyplot(fig)
-    
-    # 분기별 평균 평점 테이블
-    st.subheader("분기별 평균 평점")
-    mean_by_q = dfe.groupby('방영분기')['점수'].mean().round(3).reindex(quarters)
-    st.dataframe(mean_by_q.rename('평균 점수').reset_index(), use_container_width=True)
 
 
 # --- 4.4 워드클라우드 ---

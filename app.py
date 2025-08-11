@@ -457,7 +457,7 @@ with tabs[7]:
                 gs.fit(X_train, y_train)
 
             st.subheader("베스트 결과")
-            st.json(gs.best
+            st.json(gs.best)
 
 
 # --- 4.9 예측 실행 (선택형 유틸 사용) ---

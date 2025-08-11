@@ -183,7 +183,7 @@ with st.sidebar:
     )
 
 # ===== 탭 구성 =====
-tabs = st.tabs(["🗂개요","📊기초통계","📈분포/교차","💬워드클라우드","⚙️필터","🔍전체보기","🤖ML모델","🔧튜닝","🎯예측"])
+tabs = st.tabs(["🗂개요","📊기초통계","📈분포/교차","💬워드클라우드","⚙️필터","🔍전체보기","🔧튜닝","🤖ML모델","🎯예측"])
 
 # --- 4.1 데이터 개요 ---
 with tabs[0]:
@@ -326,159 +326,143 @@ with tabs[5]:
     st.dataframe(raw_df, use_container_width=True)
 
 # --- 4.7 머신러닝 모델링 (Colab 설정 그대로) ---
+# --- 4.8 GridSearch 튜닝 (모든 모델) ---
 with tabs[6]:
-    st.header("머신러닝 모델링 (Colab 설정)")
-    # split 고정
+    st.header("GridSearchCV 튜닝")
+
+    # split 보장 (튜닝을 먼저 들어와도 동작하도록)
     if "split_colab" not in st.session_state or st.session_state.get("split_key") != float(test_size):
-        X_train, X_test, y_train, y_test = train_test_split(X_colab_base, y_all, test_size=test_size, random_state=SEED, shuffle=True)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_colab_base, y_all, test_size=test_size, random_state=SEED, shuffle=True
+        )
         st.session_state["split_colab"] = (X_train, X_test, y_train, y_test)
         st.session_state["split_key"] = float(test_size)
     X_train, X_test, y_train, y_test = st.session_state["split_colab"]
 
-    rf_pipe = Pipeline([('preprocessor', preprocessor), ('model', RandomForestRegressor(random_state=SEED))])
-    rf_pipe.fit(X_train, y_train)
-    y_pred_tr = rf_pipe.predict(X_train)
-    y_pred_te = rf_pipe.predict(X_test)
+    scoring = st.selectbox("스코어링", ["neg_root_mean_squared_error", "r2"], index=0)
+    cv = st.number_input("CV 폴드 수", 3, 10, 5, 1)
 
-    st.metric("Train R²", f"{r2_score(y_train,y_pred_tr):.3f}")
-    st.metric("Test  R²", f"{r2_score(y_test,y_pred_te):.3f}")
-    st.metric("Train RMSE", f"{rmse(y_train,y_pred_tr):.3f}")
-    st.metric("Test  RMSE", f"{rmse(y_test,y_pred_te):.3f}")
+    model_zoo = {
+        "KNN": ("nonsparse", KNeighborsRegressor()),
+        "Linear Regression (Poly)": ("nonsparse", LinearRegression()),
+        "Ridge": ("nonsparse", Ridge()),
+        "Lasso": ("nonsparse", Lasso()),
+        "ElasticNet": ("nonsparse", ElasticNet(max_iter=10000)),
+        "SGDRegressor": ("nonsparse", SGDRegressor(max_iter=10000)),
+        "SVR": ("nonsparse", SVR()),
+        "Decision Tree": ("tree", DecisionTreeRegressor(random_state=SEED)),
+        "Random Forest": ("tree", RandomForestRegressor(random_state=SEED)),
+    }
+    if 'XGBRegressor' in globals() and XGB_AVAILABLE:
+        model_zoo["XGBRegressor"] = ("tree", XGBRegressor(
+            random_state=SEED, objective="reg:squarederror",
+            n_jobs=-1, tree_method="hist"
+        ))
+
+    def make_pipeline(kind, estimator):
+        if kind == "tree":
+            return Pipeline([('preprocessor', preprocessor), ('model', estimator)])
+        else:
+            return Pipeline([
+                ('preprocessor', preprocessor),
+                ('poly', PolynomialFeatures(include_bias=False)),
+                ('scaler', StandardScaler(with_mean=False)),
+                ('model', estimator)
+            ])
+
+    param_grids = {
+        "KNN": {"poly__degree":[1,2,3], "model__n_neighbors":[3,4,5,6,7,8,9,10]},
+        "Linear Regression (Poly)": {"poly__degree":[1,2,3]},
+        "Ridge": {"poly__degree":[1,2,3], "model__alpha":[0.001,0.01,0.1,1,10,100,1000]},
+        "Lasso": {"poly__degree":[1,2,3], "model__alpha":[0.001,0.01,0.1,1,10,100,1000]},
+        "ElasticNet": {"poly__degree":[1,2,3], "model__alpha":[0.001,0.01,0.1,1,10,100,1000], "model__l1_ratio":[0.1,0.5,0.9]},
+        "SGDRegressor": {"poly__degree":[1,2,3], "model__learning_rate":["constant","invscaling","adaptive"]},
+        "SVR": {"poly__degree":[1,2,3], "model__kernel":["poly","rbf","sigmoid"], "model__degree":[1,2,3]},
+        "Decision Tree": {"model__max_depth":[10,15,20,25,30], "model__min_samples_split":[5,6,7,8,9,10], "model__min_samples_leaf":[2,3,4,5], "model__max_leaf_nodes":[None,10,20,30]},
+        "Random Forest": {"model__n_estimators":[100,200,300], "model__min_samples_split":[5,6,7,8,9,10], "model__max_depth":[5,10,15,20,25,30]},
+    }
+    if "XGBRegressor" in model_zoo:
+        param_grids["XGBRegressor"] = {
+            "model__n_estimators":[200,400],
+            "model__max_depth":[3,5,7],
+            "model__learning_rate":[0.03,0.1,0.3],
+            "model__subsample":[0.8,1.0],
+            "model__colsample_bytree":[0.8,1.0],
+        }
+
+    model_name = st.selectbox("튜닝할 모델 선택", list(model_zoo.keys()), index=0)
+    kind, estimator = model_zoo[model_name]
+    pipe = make_pipeline(kind, estimator)
+    grid = param_grids[model_name]
+
+    if st.button("GridSearch 실행"):
+        gs = GridSearchCV(pipe, grid, cv=int(cv), scoring=scoring, n_jobs=-1, refit=True, return_train_score=True)
+        with st.spinner("GridSearchCV 실행 중..."):
+            gs.fit(X_train, y_train)
+
+        st.subheader("베스트 결과")
+        st.json(gs.best_params_)
+        if scoring == "neg_root_mean_squared_error":
+            st.write(f"Best CV RMSE: {-gs.best_score_:.6f}")
+        else:
+            st.write(f"Best CV {scoring}: {gs.best_score_:.6f}")
+
+        y_pred = gs.predict(X_test)
+        st.write(f"Test RMSE: {rmse(y_test, y_pred):.6f}")
+        st.write(f"Test R²  : {r2_score(y_test, y_pred):.6f}")
+
+        # ▶ 모델링 탭에서 즉시 활용할 수 있도록 저장
+        st.session_state["best_estimator"] = gs.best_estimator_
+        st.session_state["best_params"] = gs.best_params_
+        st.session_state["best_name"] = model_name
+        st.session_state["best_cv_score"] = gs.best_score_
+        st.session_state["best_scoring"] = scoring
+        st.session_state["best_split_key"] = st.session_state.get("split_key")
+
+        cvres = pd.DataFrame(gs.cv_results_)
+        cols = ["rank_test_score","mean_test_score","std_test_score","mean_train_score","std_train_score","params"]
+        st.dataframe(cvres[cols].sort_values("rank_test_score").reset_index(drop=True))
+
+    if model_name == "XGBRegressor" and not XGB_AVAILABLE:
+        st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
 
 # --- 4.8 GridSearch 튜닝 (RandomForest, Colab 그리드) ---
+# --- 4.7 머신러닝 모델링 (Colab 설정 그대로/베스트 자동 적용) ---
 with tabs[7]:
-    st.header("GridSearchCV 튜닝")
-    if "split_colab" not in st.session_state:
-        st.info("먼저 '머신러닝 모델링 (Colab 설정)' 탭을 한 번 실행해 주세요.")
+    st.header("머신러닝 모델링 (Colab 설정)")
+
+    # split 보장
+    if "split_colab" not in st.session_state or st.session_state.get("split_key") != float(test_size):
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_colab_base, y_all, test_size=test_size, random_state=SEED, shuffle=True
+        )
+        st.session_state["split_colab"] = (X_train, X_test, y_train, y_test)
+        st.session_state["split_key"] = float(test_size)
+    X_train, X_test, y_train, y_test = st.session_state["split_colab"]
+
+    # ▶ 베스트 모델 있으면 사용, 없으면 RF 베이스라인
+    if "best_estimator" in st.session_state:
+        model = st.session_state["best_estimator"]  # 이미 fit됨
+        st.caption(f"현재 모델: GridSearch 베스트 모델 사용 ({st.session_state.get('best_name')})")
+        if st.session_state.get("best_split_key") != st.session_state.get("split_key"):
+            st.warning("주의: 베스트 모델은 이전 분할로 학습됨. 새 분할로 다시 튜닝해 주세요.", icon="⚠️")
     else:
-        X_train, X_test, y_train, y_test = st.session_state["split_colab"]
+        model = Pipeline([('preprocessor', preprocessor),
+                          ('model', RandomForestRegressor(random_state=SEED))])
+        model.fit(X_train, y_train)
+        st.caption("현재 모델: 기본 RandomForest (미튜닝)")
 
-        scoring = st.selectbox("스코어링", ["neg_root_mean_squared_error", "r2"], index=0)
-        cv = st.number_input("CV 폴드 수", 3, 10, 5, 1)
+    # 지표 출력
+    y_pred_tr = model.predict(X_train)
+    y_pred_te = model.predict(X_test)
+    st.metric("Train R²", f"{r2_score(y_train, y_pred_tr):.3f}")
+    st.metric("Test  R²", f"{r2_score(y_test,  y_pred_te):.3f}")
+    st.metric("Train RMSE", f"{rmse(y_train, y_pred_tr):.3f}")
+    st.metric("Test  RMSE", f"{rmse(y_test,  y_pred_te):.3f}")
 
-        # 1) 모델 풀
-        model_zoo = {
-            "KNN": ("nonsparse", KNeighborsRegressor()),
-            "Linear Regression (Poly)": ("nonsparse", LinearRegression()),
-            "Ridge": ("nonsparse", Ridge()),
-            "Lasso": ("nonsparse", Lasso()),
-            "ElasticNet": ("nonsparse", ElasticNet(max_iter=10000)),
-            "SGDRegressor": ("nonsparse", SGDRegressor(max_iter=10000)),
-            "SVR": ("nonsparse", SVR()),
-            "Decision Tree": ("tree", DecisionTreeRegressor(random_state=SEED)),
-            "Random Forest": ("tree", RandomForestRegressor(random_state=SEED)),
-        }
-        if 'XGBRegressor' in globals() and XGB_AVAILABLE:
-            model_zoo["XGBRegressor"] = ("tree", XGBRegressor(
-                random_state=SEED,
-                objective="reg:squarederror",
-                n_jobs=-1,
-                tree_method="hist"
-            ))
-
-        # 2) 파이프라인 빌더
-        # - 'nonsparse'는 poly+scaler(+preprocessor) 사용
-        #   (OneHot 결과가 희소일 수 있어 scaler는 with_mean=False)
-        def make_pipeline(kind, estimator):
-            if kind == "tree":
-                return Pipeline([
-                    ('preprocessor', preprocessor),
-                    ('model', estimator),
-                ])
-            else:
-                return Pipeline([
-                    ('preprocessor', preprocessor),
-                    ('poly', PolynomialFeatures(include_bias=False)),
-                    ('scaler', StandardScaler(with_mean=False)),
-                    ('model', estimator),
-                ])
-
-        # 3) 파라미터 그리드
-        param_grids = {
-            "KNN": {
-                "poly__degree": [1, 2, 3],
-                "model__n_neighbors": [3,4,5,6,7,8,9,10],
-            },
-            "Linear Regression (Poly)": {
-                "poly__degree": [1, 2, 3],
-            },
-            "Ridge": {
-                "poly__degree": [1, 2, 3],
-                "model__alpha": [0.001, 0.01, 0.1, 1, 10, 100, 1000],
-            },
-            "Lasso": {
-                "poly__degree": [1, 2, 3],
-                "model__alpha": [0.001, 0.01, 0.1, 1, 10, 100, 1000],
-            },
-            "ElasticNet": {
-                "poly__degree": [1, 2, 3],
-                "model__alpha": [0.001, 0.01, 0.1, 1, 10, 100, 1000],
-                "model__l1_ratio": [0.1, 0.5, 0.9],
-            },
-            "SGDRegressor": {
-                "poly__degree": [1, 2, 3],
-                "model__learning_rate": ["constant", "invscaling", "adaptive"],
-                # 필요 시: "model__eta0": [0.001, 0.01, 0.1]
-            },
-            "SVR": {
-                "poly__degree": [1, 2, 3],  # poly 커널일 때만 의미, 같이 둬도 OK
-                "model__kernel": ["poly", "rbf", "sigmoid"],
-                "model__degree": [1, 2, 3],
-            },
-            "Decision Tree": {
-                "model__max_depth": [10, 15, 20, 25, 30],
-                "model__min_samples_split": [5, 6, 7, 8, 9, 10],
-                "model__min_samples_leaf": [2, 3, 4, 5],
-                "model__max_leaf_nodes": [None, 10, 20, 30],
-            },
-            "Random Forest": {
-                "model__n_estimators": [100, 200, 300],
-                "model__min_samples_split": [5, 6, 7, 8, 9, 10],
-                "model__max_depth": [5, 10, 15, 20, 25, 30],
-            },
-        }
-        if "XGBRegressor" in model_zoo:
-            param_grids["XGBRegressor"] = {
-                "model__n_estimators": [200, 400],
-                "model__max_depth": [3, 5, 7],
-                "model__learning_rate": [0.03, 0.1, 0.3],
-                "model__subsample": [0.8, 1.0],
-                "model__colsample_bytree": [0.8, 1.0],
-            }
-
-        # 4) 실행
-        model_name = st.selectbox("튜닝할 모델 선택", list(model_zoo.keys()), index=0)
-        kind, estimator = model_zoo[model_name]
-        pipe = make_pipeline(kind, estimator)
-        grid = param_grids[model_name]
-
-        if st.button("GridSearch 실행"):
-            gs = GridSearchCV(
-                pipe, grid,
-                cv=int(cv), scoring=scoring, n_jobs=-1,
-                refit=True, return_train_score=True
-            )
-            with st.spinner("GridSearchCV 실행 중..."):
-                gs.fit(X_train, y_train)
-
-            st.subheader("베스트 결과")
-            st.json(gs.best_params_)
-            if scoring == "neg_root_mean_squared_error":
-                st.write(f"Best CV RMSE: {-gs.best_score_:.6f}")
-            else:
-                st.write(f"Best CV {scoring}: {gs.best_score_:.6f}")
-
-            y_pred = gs.predict(X_test)
-            st.write(f"Test RMSE: {rmse(y_test, y_pred):.6f}")
-            st.write(f"Test R²  : {r2_score(y_test, y_pred):.6f}")
-
-            cvres = pd.DataFrame(gs.cv_results_)
-            cols = ["rank_test_score","mean_test_score","std_test_score","mean_train_score","std_train_score","params"]
-            st.dataframe(cvres[cols].sort_values("rank_test_score").reset_index(drop=True))
-
-        # 설치가 안 되어 있을 때 XGB 알림
-        if model_name == "XGBRegressor" and not XGB_AVAILABLE:
-            st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
+    if "best_params" in st.session_state:
+        with st.expander("베스트 하이퍼파라미터 보기"):
+            st.json(st.session_state["best_params"])
 
 # --- 4.9 예측 실행 (선택형 유틸 사용) ---
 with tabs[8]:

@@ -553,7 +553,7 @@ with tabs[8]:
     col_left, col_right = st.columns(2)
 
     with col_left:
-        st.markdown("**① 인물 특성**")
+        st.markdown("**① 배우 특성**")
         input_age     = st.number_input("나이", 10, 80, 30)
         input_gender  = st.selectbox("성별", gender_opts) if gender_opts else st.text_input("성별 입력", "")
         input_role    = st.selectbox("역할", role_opts) if role_opts else st.text_input("역할 입력", "")

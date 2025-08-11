@@ -233,7 +233,148 @@ with tabs[6]:
 # --- 4.8 GridSearch 튜닝 ---
 with tabs[7]:
     st.header("GridSearchCV 튜닝")
-    st.info("이 탭은 필요 시 추가 구현")
+    st.info("모델을 선택하고 GridSearchCV를 실행해 보세요.")
+
+    # ⚠️ 전제: X_train, X_test, y_train, y_test 가 이미 준비되어 있다고 가정
+    # 회귀 문제 기준 scoring 예시: neg_mean_squared_error (원하면 바꿔도 됨)
+    scoring = st.selectbox("스코어링", ["neg_mean_squared_error", "r2"], index=0)
+    cv = st.number_input("CV 폴드 수", min_value=3, max_value=10, value=5, step=1)
+
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+    from sklearn.neighbors import KNeighborsRegressor
+    from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet, SGDRegressor
+    from sklearn.svm import SVR
+    from sklearn.tree import DecisionTreeRegressor
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.model_selection import GridSearchCV
+    import pandas as pd
+    import numpy as np
+
+    # 1) 모델 팩토리 (전부 'model' 이라는 스텝 이름으로 통일)
+    model_zoo = {
+        "KNN": KNeighborsRegressor(),
+        "Linear Regression": LinearRegression(),
+        "Ridge": Ridge(),
+        "Lasso": Lasso(),
+        "ElasticNet": ElasticNet(max_iter=10000),
+        "SGDRegressor": SGDRegressor(max_iter=10000),
+        "SVR": SVR(),
+        "Decision Tree": DecisionTreeRegressor(random_state=42),
+        "Random Forest": RandomForestRegressor(random_state=42),
+    }
+
+    # 2) 공통 파이프라인: 다수 모델에선 Poly+Scale가 유효
+    #    - 트리/랜덤포레스트는 다항/스케일 불필요 → 그 모델은 별도 파이프라인 사용
+    def make_pipeline(name):
+        if name in ["Decision Tree", "Random Forest"]:
+            return Pipeline([("model", model_zoo[name])])  # 단순
+        else:
+            return Pipeline([
+                ("poly", PolynomialFeatures(include_bias=False)),
+                ("scaler", StandardScaler()),
+                ("model", model_zoo[name]),
+            ])
+
+    # 3) 파라미터 그리드 (모두 model__* 로 정규화)
+    #    * 요청 주신 범위를 그대로 반영하되, 오타/네이밍을 파이프라인에 맞게 수정
+    param_grids = {
+        "KNN": {
+            "poly__degree": [1, 2, 3],
+            "model__n_neighbors": [3,4,5,6,7,8,9,10],
+        },
+        "Linear Regression": {
+            "poly__degree": [1, 2, 3],
+        },
+        "Ridge": {
+            "poly__degree": [1, 2, 3],
+            "model__alpha": [0.001, 0.01, 0.1, 1, 10, 100, 1000],
+        },
+        "Lasso": {
+            "poly__degree": [1, 2, 3],
+            "model__alpha": [0.001, 0.01, 0.1, 1, 10, 100, 1000],
+        },
+        "ElasticNet": {
+            "poly__degree": [1, 2, 3],
+            "model__alpha": [0.001, 0.01, 0.1, 1, 10, 100, 1000],
+            "model__l1_ratio": [0.1, 0.5, 0.9],
+        },
+        "SGDRegressor": {
+            "poly__degree": [1, 2, 3],
+            "model__learning_rate": ["constant", "invscaling", "adaptive"],
+            # 필요시 eta0 등도 추가 가능: "model__eta0": [0.001, 0.01, 0.1]
+        },
+        "SVR": {
+            "poly__degree": [1, 2, 3],  # poly 커널일 때만 의미 있지만, 함께 튜닝해도 무방
+            "model__kernel": ["poly", "rbf", "sigmoid"],
+            "model__degree": [1, 2, 3],
+        },
+        "Decision Tree": {
+            # poly/scale 없음
+            "model__max_depth": [10, 15, 20, 25, 30],
+            "model__min_samples_split": [5, 6, 7, 8, 9, 10],
+            "model__min_samples_leaf": [2, 3, 4, 5],
+            "model__max_leaf_nodes": [None, 10, 20, 30],
+        },
+        "Random Forest": {
+            # poly/scale 없음
+            "model__n_estimators": [100, 200, 300],
+            "model__min_samples_split": [5, 6, 7, 8, 9, 10],
+            "model__max_depth": [5, 10, 15, 20, 25, 30],
+        },
+    }
+
+    model_name = st.selectbox(
+        "튜닝할 모델 선택",
+        list(model_zoo.keys()),
+        index=0
+    )
+
+    run = st.button("GridSearch 실행")
+
+    if run:
+        pipe = make_pipeline(model_name)
+        grid = param_grids[model_name]
+
+        gs = GridSearchCV(
+            estimator=pipe,
+            param_grid=grid,
+            scoring=scoring,
+            cv=cv,
+            n_jobs=-1,
+            refit=True,
+            return_train_score=True,
+        )
+        with st.spinner("GridSearchCV 실행 중..."):
+            gs.fit(X_train, y_train)
+
+        st.success("완료!")
+
+        # 결과 요약
+        st.subheader("베스트 결과")
+        st.write("Best Params:", gs.best_params_)
+        st.write("Best CV Score:", gs.best_score_)
+
+        # 테스트셋 평가
+        y_pred = gs.predict(X_test)
+        from sklearn.metrics import mean_squared_error, r2_score
+        test_mse = mean_squared_error(y_test, y_pred)
+        test_r2 = r2_score(y_test, y_pred)
+        st.write(f"Test MSE: {test_mse:.6f}")
+        st.write(f"Test R2 : {test_r2:.6f}")
+
+        # CV 상세 결과 표
+        cvres = pd.DataFrame(gs.cv_results_)
+        wanted_cols = [
+            "rank_test_score",
+            "mean_test_score",
+            "std_test_score",
+            "mean_train_score",
+            "std_train_score",
+            "params",
+        ]
+        st.dataframe(cvres[wanted_cols].sort_values("rank_test_score").reset_index(drop=True))
+
 
 # --- 4.9 예측 실행 ---
 with tabs[8]:

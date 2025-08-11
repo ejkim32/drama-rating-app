@@ -290,7 +290,7 @@ with tabs[2]:
     ct['플랫폼_up'] = ct['플랫폼'].str.upper()
     focus = ['KBS','MBC','TVN','NETFLIX','SBS']
     fig3 = px.line(ct[ct['플랫폼_up'].isin(focus)], x='방영년도', y='count', color='플랫폼',
-                   log_y=True, title="연도별 주요 플랫폼 작품 수 (로그 스케일)")
+                   log_y=True, title="연도별 주요 플랫폼 작품 수")
     st.plotly_chart(fig3, use_container_width=True)
 
     st.subheader("멀티장르 vs 단일장르 평균 평점 (배우 단위 박스플롯)")

@@ -533,39 +533,56 @@ with tabs[7]:
         with st.expander("베스트 하이퍼파라미터 보기"):
             st.json(st.session_state["best_params"])
 
-# --- 4.9 예측 실행 (선택형 유틸 사용) ---
+# --- 4.9 예측 실행 — 입력 묶음/장르구분 생성 & 베스트 모델 사용 ---
+from sklearn.base import clone
+
 with tabs[8]:
     st.header("평점 예측")
-    st.subheader("1) 입력 (나이→연령대 자동 계산)")
 
-    # 옵션
-    genre_opts = sorted({g for sub in raw_df['장르'].dropna().apply(clean_cell_colab) for g in sub})
-    week_opts  = sorted({d for sub in raw_df['방영요일'].dropna().apply(clean_cell_colab) for d in sub})
-    plat_opts  = sorted({p for sub in raw_df['플랫폼'].dropna().apply(clean_cell_colab) for p in sub})
-    gender_opts   = sorted(raw_df['성별'].dropna().unique())
-    role_opts     = sorted(raw_df['역할'].dropna().unique())
-    quarter_opts  = sorted(raw_df['방영분기'].dropna().unique())
-    married_opts  = sorted(raw_df['결혼여부'].dropna().unique())
+    # 선택지 준비
+    genre_opts   = sorted({g for sub in raw_df['장르'].dropna().apply(clean_cell_colab) for g in sub})
+    week_opts    = sorted({d for sub in raw_df['방영요일'].dropna().apply(clean_cell_colab) for d in sub})
+    plat_opts    = sorted({p for sub in raw_df['플랫폼'].dropna().apply(clean_cell_colab) for p in sub})
+    gender_opts  = sorted(raw_df['성별'].dropna().unique())
+    role_opts    = sorted(raw_df['역할'].dropna().unique())
+    quarter_opts = sorted(raw_df['방영분기'].dropna().unique())
+    married_opts = sorted(raw_df['결혼여부'].dropna().unique())
 
-    # 입력: 연령대 선택은 제거하고 '나이'만 받음
-    input_age     = st.number_input("나이", 10, 80, 30)
-    input_gender  = st.selectbox("성별", gender_opts) if gender_opts else st.text_input("성별 입력", "")
-    input_role    = st.selectbox("역할", role_opts) if role_opts else st.text_input("역할 입력", "")
-    input_quarter = st.selectbox("방영분기", quarter_opts) if quarter_opts else st.text_input("방영분기 입력", "")
-    input_married = st.selectbox("결혼여부", married_opts) if married_opts else st.text_input("결혼여부 입력", "")
+    # 입력을 두 묶음으로 배치
+    st.subheader("1) 입력")
+    col_left, col_right = st.columns(2)
 
-    input_genre = st.multiselect("장르 (멀티 선택)", genre_opts, default=genre_opts[:1] if genre_opts else [])
-    input_week  = st.multiselect("방영요일 (멀티 선택)", week_opts, default=week_opts[:1] if week_opts else [])
-    input_plat  = st.multiselect("플랫폼 (멀티 선택)", plat_opts, default=plat_opts[:1] if plat_opts else [])
+    with col_left:
+        st.markdown("**① 인물 특성**")
+        input_age     = st.number_input("나이", 10, 80, 30)
+        input_gender  = st.selectbox("성별", gender_opts) if gender_opts else st.text_input("성별 입력", "")
+        input_role    = st.selectbox("역할", role_opts) if role_opts else st.text_input("역할 입력", "")
+        input_married = st.selectbox("결혼여부", married_opts) if married_opts else st.text_input("결혼여부 입력", "")
 
-    # 나이 → 연령대 자동 산출 (미리 보여주기)
-    derived_age_group = age_to_age_group(int(input_age))
-    st.caption(f"자동 계산된 연령대: **{derived_age_group}**")
+        # 나이 → 연령대 자동 산출
+        derived_age_group = age_to_age_group(int(input_age))
+        st.caption(f"자동 계산된 연령대: **{derived_age_group}**")
+
+    with col_right:
+        st.markdown("**② 작품/편성 특성**")
+        input_quarter = st.selectbox("방영분기", quarter_opts) if quarter_opts else st.text_input("방영분기 입력", "")
+        input_genre   = st.multiselect("장르 (멀티 선택)", genre_opts, default=genre_opts[:1] if genre_opts else [])
+        input_week    = st.multiselect("방영요일 (멀티 선택)", week_opts, default=week_opts[:1] if week_opts else [])
+        input_plat    = st.multiselect("플랫폼 (멀티 선택)", plat_opts, default=plat_opts[:1] if plat_opts else [])
+
+        # 장르 개수로 장르구분 생성
+        if len(input_genre) == 0:
+            genre_group_label = "장르없음"
+        elif len(input_genre) == 1:
+            genre_group_label = "단일장르"
+        else:
+            genre_group_label = "멀티장르"
+        st.caption(f"장르구분: **{genre_group_label}**")
 
     predict_btn = st.button("예측 실행")
 
     if predict_btn:
-        # 1) 예측 모델 선택: 베스트 있으면 clone해서 전체 데이터로 재학습
+        # 1) 사용할 모델 결정: 베스트 있으면 clone해서 전체 데이터로 재학습
         if "best_estimator" in st.session_state:
             model_full = clone(st.session_state["best_estimator"])
             st.caption(f"예측 모델: GridSearch 베스트 재학습 사용 ({st.session_state.get('best_name')})")
@@ -579,25 +596,38 @@ with tabs[8]:
         # 2) 전체 데이터로 재학습
         model_full.fit(X_colab_base, y_all)
 
-        # 3) 사용자 입력 → DF (멀티라벨은 리스트 유지)
+        # 3) 사용자 입력 → DF (멀티라벨은 리스트 유지, 장르구분 추가)
         user_raw = pd.DataFrame([{
             '나이'    : input_age,
             '성별'    : input_gender,
             '역할'    : input_role,
-            '방영분기': input_quarter,
             '결혼여부': input_married,
-            '연령대'  : derived_age_group,   # ← 자동 매핑 결과
-            '장르'   : input_genre,
-            '방영요일': input_week,
-            '플랫폼' : input_plat,
+            '방영분기': input_quarter,
+            '연령대'  : derived_age_group,   # 자동 매핑
+            '장르'    : input_genre,         # list
+            '방영요일' : input_week,          # list
+            '플랫폼'  : input_plat,          # list
+            '장르구분' : genre_group_label,   # 새 파생 변수(현재 모델에는 미사용)
         }])
 
         # 4) 멀티라벨 변환 + X 스키마 정렬
         user_mlb = colab_multilabel_transform(user_raw, cols=('장르','방영요일','플랫폼'))
+
+        # 학습 X 스키마와 컬럼 정합 (여분은 제거, 부족분은 0으로 채움)
         user_base = pd.concat([X_colab_base.iloc[:0].copy(), user_mlb], ignore_index=True)
+        # 드롭 대상 제거(훈련 시 제외했던 컬럼들)
         user_base = user_base.drop(columns=[c for c in drop_cols if c in user_base.columns], errors='ignore')
-        user_base = user_base.tail(1)
+        # 훈련에 없는 컬럼은 삭제, 있는데 빠진 컬럼은 0으로 채움
+        for c in X_colab_base.columns:
+            if c not in user_base.columns:
+                user_base[c] = 0
+        user_base = user_base[X_colab_base.columns].tail(1)
 
         # 5) 예측
         pred = model_full.predict(user_base)[0]
         st.success(f"💡 예상 평점: {pred:.2f}")
+
+        # 참고: 장르구분을 실제 특징으로 쓰고 싶다면,
+        #  - 학습 데이터(df_mlb)에도 동일 규칙으로 '장르구분'을 만들어 X_colab_base에 포함시키고
+        #  - preprocessor의 범주형 목록에 '장르구분'을 추가하세요.
+

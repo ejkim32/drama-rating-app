@@ -203,31 +203,31 @@ with tabs[2]:
     # 3) 멀티장르 vs 단일장르
     st.subheader("멀티장르 vs 단일장르 평균 평점 (배우 단위 박스플롯)")
 
-# 배우별 장르 다양성 계산 → 멀티/단일 라벨
-ag = (
-    pd.DataFrame({'배우명': raw_df['배우명'], '장르': raw_df['장르']})
-    .explode('장르')
-    .groupby('배우명')['장르'].nunique()
-)
-multi_set = set(ag[ag > 1].index)
+    # 배우별 장르 다양성 계산 → 멀티/단일 라벨
+    ag = (
+        pd.DataFrame({'배우명': raw_df['배우명'], '장르': raw_df['장르']})
+        .explode('장르')
+        .groupby('배우명')['장르'].nunique()
+    )
+    multi_set = set(ag[ag > 1].index)
 
-label_map = {name: ('멀티장르' if name in multi_set else '단일장르') for name in ag.index}
+    label_map = {name: ('멀티장르' if name in multi_set else '단일장르') for name in ag.index}
 
-# 배우 단위 평균 점수
-actor_mean = (
-    raw_df.groupby('배우명', as_index=False)['점수'].mean()
-          .rename(columns={'점수': '배우평균점수'})
-)
-actor_mean['장르구분'] = actor_mean['배우명'].map(label_map)
+    # 배우 단위 평균 점수
+    actor_mean = (
+        raw_df.groupby('배우명', as_index=False)['점수'].mean()
+              .rename(columns={'점수': '배우평균점수'})
+    )
+    actor_mean['장르구분'] = actor_mean['배우명'].map(label_map)
 
-# 박스플롯
-fig_box = px.box(
-    actor_mean, 
-    x='장르구분', 
-    y='배우평균점수',
-    title="멀티장르 vs 단일장르 배우 단위 평균 점수 분포"
-)
-st.plotly_chart(fig_box, use_container_width=True)
+    # 박스플롯
+    fig_box = px.box(
+        actor_mean, 
+        x='장르구분', 
+        y='배우평균점수',
+        title="멀티장르 vs 단일장르 배우 단위 평균 점수 분포"
+    )
+    st.plotly_chart(fig_box, use_container_width=True)
     # 4) 주연 배우 결혼 상태별 평균 점수 비교
     st.subheader("주연 배우 결혼 상태별 평균 점수 비교")
 

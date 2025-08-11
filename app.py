@@ -201,12 +201,9 @@ with tabs[2]:
     st.plotly_chart(fig3)
 
     # 3) 멀티장르 vs 단일장르
-    st.subheader("멀티장르 vs 단일장르 평균 평점 (배우 단위 비교)")
+    st.subheader("멀티장르 vs 단일장르 평균 평점 (배우 단위 박스플롯)")
 
-import numpy as np
-import pandas as pd
-
-# 1) 배우별 장르 다양성 계산 → 멀티/단일 라벨
+# 배우별 장르 다양성 계산 → 멀티/단일 라벨
 ag = (
     pd.DataFrame({'배우명': raw_df['배우명'], '장르': raw_df['장르']})
     .explode('장르')
@@ -216,75 +213,23 @@ multi_set = set(ag[ag > 1].index)
 
 label_map = {name: ('멀티장르' if name in multi_set else '단일장르') for name in ag.index}
 
-# 2) 배우 단위 평균 점수로 집계 (배우가 많이 출연해도 1표로)
+# 배우 단위 평균 점수
 actor_mean = (
     raw_df.groupby('배우명', as_index=False)['점수'].mean()
           .rename(columns={'점수': '배우평균점수'})
 )
 actor_mean['장르구분'] = actor_mean['배우명'].map(label_map)
 
-# 3) 요약 통계 (mean, N, 95% CI)
-summary = (
-    actor_mean.groupby('장르구분')['배우평균점수']
-    .agg(['mean', 'std', 'count'])
-    .rename(columns={'mean': '평균', 'std': '표준편차', 'count': 'N'})
-    .reset_index()
-)
-summary['SE'] = summary['표준편차'] / np.sqrt(summary['N'])
-summary['CI95'] = 1.96 * summary['SE']               # 오차막대 길이
-summary['표시라벨'] = summary.apply(lambda r: f"{r['평균']:.2f} (N={int(r['N'])})", axis=1)
-
-# 4) 막대그래프 + 95% CI 오차막대
-import plotly.express as px
-
-fig_bar = px.bar(
-    summary,
-    x='장르구분', y='평균', text='표시라벨',
-    error_y='CI95',
-    title="멀티장르 vs 단일장르: 배우 단위 평균 점수 (+95% CI)"
-)
-fig_bar.update_traces(textposition='outside')
-st.plotly_chart(fig_bar, use_container_width=True)
-
-# 5) 분포도(박스플롯)로 실제 퍼짐도 함께 제시
+# 박스플롯
 fig_box = px.box(
-    actor_mean, x='장르구분', y='배우평균점수',
-    points='all', title="배우 단위 평균 점수 분포"
+    actor_mean, 
+    x='장르구분', 
+    y='배우평균점수',
+    points='all',  # 모든 데이터 포인트 표시
+    title="멀티장르 vs 단일장르 배우 단위 평균 점수 분포"
 )
 st.plotly_chart(fig_box, use_container_width=True)
 
-# 6) 통계적 유의성: Welch t-test + 효과크기(Cohen's d)
-try:
-    from scipy.stats import ttest_ind
-    a = actor_mean.loc[actor_mean['장르구분']=='멀티장르', '배우평균점수'].values
-    b = actor_mean.loc[actor_mean['장르구분']=='단일장르', '배우평균점수'].values
-    t_stat, p_val = ttest_ind(a, b, equal_var=False)  # Welch
-except Exception:
-    # scipy 없으면 수동 효과크기만 계산
-    a = actor_mean.loc[actor_mean['장르구분']=='멀티장르', '배우평균점수'].values
-    b = actor_mean.loc[actor_mean['장르구분']=='단일장르', '배우평균점수'].values
-    t_stat, p_val = np.nan, np.nan
-
-# Cohen's d (pooled sd)
-def cohens_d(x, y):
-    nx, ny = len(x), len(y)
-    sx, sy = np.var(x, ddof=1), np.var(y, ddof=1)
-    s_pooled = np.sqrt(((nx-1)*sx + (ny-1)*sy) / (nx+ny-2))
-    return (np.mean(x) - np.mean(y)) / s_pooled if s_pooled > 0 else np.nan
-
-d = cohens_d(a, b)
-
-# 7) 핵심 인사이트 문장 요약
-mean_multi = np.mean(a); mean_single = np.mean(b)
-diff = mean_multi - mean_single
-pct = (diff / mean_single * 100) if mean_single != 0 else np.nan
-
-st.caption(
-    f"인사이트: 배우 단위 기준으로 멀티장르 평균은 {mean_multi:.2f}, "
-    f"단일장르 평균은 {mean_single:.2f} 입니다. "
-    f"차이(멀티−단일)는 {diff:+.2f}점 ({pct:+.1f}%)이며, "
-    f"Welch t-test p-value = {p_val:.4f}, Cohen's d = {d:.2f} 입니다."
-)
 
 
 # --- 4.4 워드클라우드 ---

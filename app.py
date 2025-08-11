@@ -457,6 +457,44 @@ with tabs[2]:
     plt.tight_layout()
     st.pyplot(fig)
 
+    # --- 분기별 평점 분포 (Boxplot) & 평균 테이블 ---
+    st.subheader("분기별 드라마 평점 분포 (Boxplot)")
+    
+    import re
+    
+    # 준비: 숫자형 변환 & 결측 제거
+    dfe = raw_df[['방영분기','점수']].copy()
+    dfe['점수'] = pd.to_numeric(dfe['점수'], errors='coerce')
+    dfe = dfe.dropna(subset=['방영분기','점수'])
+    
+    # 분기 순서 정렬 함수 (예: '1분기' → 1, 'Q2' → 2)
+    def q_key(x: str):
+        m = re.search(r'(\d+)', str(x))
+        return int(m.group(1)) if m else 999
+    
+    quarters = sorted(dfe['방영분기'].astype(str).unique(), key=q_key)
+    
+    # Boxplot (seaborn 우선, 없으면 matplotlib로 폴백)
+    fig, ax = plt.subplots(figsize=(7, 4))
+    try:
+        import seaborn as sns
+        sns.boxplot(data=dfe, x='방영분기', y='점수', order=quarters, ax=ax)
+    except Exception:
+        data_by_q = [dfe.loc[dfe['방영분기'].astype(str)==q, '점수'].values for q in quarters]
+        ax.boxplot(data_by_q, labels=quarters, patch_artist=True)
+    
+    ax.set_title('분기별 드라마 평점 분포')
+    ax.set_xlabel('방영분기')
+    ax.set_ylabel('점수')
+    plt.tight_layout()
+    st.pyplot(fig)
+    
+    # 분기별 평균 평점 테이블
+    st.subheader("분기별 평균 평점")
+    mean_by_q = dfe.groupby('방영분기')['점수'].mean().round(3).reindex(quarters)
+    st.dataframe(mean_by_q.rename('평균 점수').reset_index(), use_container_width=True)
+
+
 # --- 4.4 워드클라우드 ---
 from wordcloud import WordCloud
 with tabs[3]:

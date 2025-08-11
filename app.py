@@ -188,7 +188,7 @@ with tabs[2]:
           .explode('플랫폼')
           .groupby(['방영년도','플랫폼']).size().reset_index(name='count'))
     ct['플랫폼_up']=ct['플랫폼'].str.upper()
-    focus = ['KBS','MBC','TVN','NETFLIX','JTBC']
+    focus = ['KBS','MBC','TVN','NETFLIX','SBS']
     fig3=px.line(ct[ct['플랫폼_up'].isin(focus)], x='방영년도',y='count',color='플랫폼'); st.plotly_chart(fig3)
     # 3) 멀티장르 vs 단일장르
     st.subheader("멀티장르 vs 단일장르 평균 평점")

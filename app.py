@@ -228,6 +228,37 @@ fig_box = px.box(
     title="멀티장르 vs 단일장르 배우 단위 평균 점수 분포"
 )
 st.plotly_chart(fig_box, use_container_width=True)
+    # 4) 주연 배우 결혼 상태별 평균 점수 비교
+    st.subheader("주연 배우 결혼 상태별 평균 점수 비교")
+
+    # 주연 배우만 필터링
+    main_roles = raw_df[raw_df['역할'] == '주연'].copy()
+
+    # 결혼상태 컬럼 생성: '미혼' vs '미혼 외'
+    main_roles['결혼상태'] = main_roles['결혼여부'].apply(lambda x: '미혼' if x == '미혼' else '미혼 외')
+
+    # 결혼 상태별 평균 점수 계산
+    avg_scores_by_marriage = main_roles.groupby('결혼상태')['점수'].mean()
+
+    # 시각화
+    fig, ax = plt.subplots(figsize=(6, 5))
+    bars = ax.bar(avg_scores_by_marriage.index, avg_scores_by_marriage.values,
+                  color=['mediumseagreen', 'gray'])
+
+    # 수치 표시
+    for bar in bars:
+        yval = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2, yval + 0.005,
+                f'{yval:.3f}',
+                ha='center', va='bottom', fontsize=12, fontweight='bold')
+
+    ax.set_title('주연 배우 결혼 상태별 평균 점수 비교', fontsize=14)
+    ax.set_ylabel('평균 점수')
+    ax.set_xlabel('결혼 상태')
+    ax.set_ylim(min(avg_scores_by_marriage.values) - 0.05, max(avg_scores_by_marriage.values) + 0.05)
+    ax.grid(axis='y', linestyle='--', alpha=0.5)
+
+    st.pyplot(fig)
 
 
 

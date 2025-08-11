@@ -14,6 +14,8 @@ from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet, SGD
 from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.base import clone
+import re
 
 #XGB가 설치돼 있으면 쓰도록 안전하게 추가
 try:
@@ -71,6 +73,53 @@ def ensure_korean_font():
     return None
 
 _ = ensure_korean_font()
+
+def age_to_age_group(age: int) -> str:
+    # 데이터셋에 있는 연령대 라벨들
+    s = raw_df.get('연령대')
+    if s is None or s.dropna().empty:
+        # 폴백: 기본 구간
+        if age < 20: return "10대"
+        if age < 30: return "20대"
+        if age < 40: return "30대"
+        if age < 50: return "40대"
+        return "50대 이상"
+
+    series = s.dropna().astype(str)
+    vocab = series.unique().tolist()
+    counts = series.value_counts()
+
+    decade = (int(age)//10)*10  # 27→20, 41→40 ...
+
+    # 1) '20대'처럼 정확한 패턴 우선
+    exact = [g for g in vocab if re.search(rf"{decade}\s*대", g)]
+    if exact:
+        return counts[exact].idxmax()  # 가장 흔한 라벨
+
+    # 2) 숫자만 포함돼도 허용 (예: '20대 후반')
+    loose = [g for g in vocab if str(decade) in g]
+    if loose:
+        return counts[loose].idxmax()
+
+    # 3) 50대 이상 폴백
+    if decade >= 50:
+        over = [g for g in vocab if ('50' in g) or ('이상' in g)]
+        if over:
+            return counts[over].idxmax()
+
+    # 4) 가장 가까운 십대 라벨로 매칭
+    with_num = []
+    for g in vocab:
+        m = re.search(r'(\d+)', g)
+        if m:
+            with_num.append((g, int(m.group(1))))
+    if with_num:
+        nearest_num = min(with_num, key=lambda t: abs(t[1]-decade))[1]
+        candidates = [g for g,n in with_num if n==nearest_num]
+        return counts[candidates].idxmax()
+
+    # 5) 최빈값
+    return counts.idxmax()
 
 # ===== 전처리 유틸 =====
 from sklearn.preprocessing import MultiLabelBinarizer, OneHotEncoder
@@ -467,38 +516,68 @@ with tabs[7]:
 # --- 4.9 예측 실행 (선택형 유틸 사용) ---
 with tabs[8]:
     st.header("평점 예측")
-    st.subheader("1) 입력")
-    genre_opts    = sorted({g for sub in raw_df['장르'].dropna().apply(clean_cell_colab) for g in sub})
-    plat_opts     = sorted({p for sub in raw_df['플랫폼'].dropna().apply(clean_cell_colab) for p in sub})
-    actor_opts    = sorted(raw_df['배우명'].dropna().unique())
+    st.subheader("1) 입력 (나이→연령대 자동 계산)")
+
+    # 옵션
+    genre_opts = sorted({g for sub in raw_df['장르'].dropna().apply(clean_cell_colab) for g in sub})
+    week_opts  = sorted({d for sub in raw_df['방영요일'].dropna().apply(clean_cell_colab) for d in sub})
+    plat_opts  = sorted({p for sub in raw_df['플랫폼'].dropna().apply(clean_cell_colab) for p in sub})
     gender_opts   = sorted(raw_df['성별'].dropna().unique())
+    role_opts     = sorted(raw_df['역할'].dropna().unique())
+    quarter_opts  = sorted(raw_df['방영분기'].dropna().unique())
     married_opts  = sorted(raw_df['결혼여부'].dropna().unique())
 
-    input_age     = st.number_input("배우 나이", 10, 80, 30)
-    input_year    = st.number_input("방영년도", 2000, 2025, 2021)
+    # 입력: 연령대 선택은 제거하고 '나이'만 받음
+    input_age     = st.number_input("나이", 10, 80, 30)
     input_gender  = st.selectbox("성별", gender_opts) if gender_opts else st.text_input("성별 입력", "")
-    input_genre   = st.multiselect("장르", genre_opts, default=genre_opts[:1] if genre_opts else [])
-    input_actor   = st.selectbox("배우명", actor_opts) if actor_opts else st.text_input("배우명 입력", "")
-    input_plat    = st.multiselect("플랫폼", plat_opts, default=plat_opts[:1] if plat_opts else [])
+    input_role    = st.selectbox("역할", role_opts) if role_opts else st.text_input("역할 입력", "")
+    input_quarter = st.selectbox("방영분기", quarter_opts) if quarter_opts else st.text_input("방영분기 입력", "")
     input_married = st.selectbox("결혼여부", married_opts) if married_opts else st.text_input("결혼여부 입력", "")
-    predict_btn   = st.button("예측 실행")
+
+    input_genre = st.multiselect("장르 (멀티 선택)", genre_opts, default=genre_opts[:1] if genre_opts else [])
+    input_week  = st.multiselect("방영요일 (멀티 선택)", week_opts, default=week_opts[:1] if week_opts else [])
+    input_plat  = st.multiselect("플랫폼 (멀티 선택)", plat_opts, default=plat_opts[:1] if plat_opts else [])
+
+    # 나이 → 연령대 자동 산출 (미리 보여주기)
+    derived_age_group = age_to_age_group(int(input_age))
+    st.caption(f"자동 계산된 연령대: **{derived_age_group}**")
+
+    predict_btn = st.button("예측 실행")
 
     if predict_btn:
-        # Colab 파이프라인으로 전체 학습
-        rf_pipe_full = Pipeline([('preprocessor', preprocessor), ('model', RandomForestRegressor(n_estimators=100, random_state=SEED))])
-        rf_pipe_full.fit(X_colab_base, y_all)
+        # 1) 예측 모델 선택: 베스트 있으면 clone해서 전체 데이터로 재학습
+        if "best_estimator" in st.session_state:
+            model_full = clone(st.session_state["best_estimator"])
+            st.caption(f"예측 모델: GridSearch 베스트 재학습 사용 ({st.session_state.get('best_name')})")
+        else:
+            model_full = Pipeline([
+                ('preprocessor', preprocessor),
+                ('model', RandomForestRegressor(n_estimators=100, random_state=SEED))
+            ])
+            st.caption("예측 모델: 기본 RandomForest (미튜닝)")
 
-        # 사용자 입력 1행
+        # 2) 전체 데이터로 재학습
+        model_full.fit(X_colab_base, y_all)
+
+        # 3) 사용자 입력 → DF (멀티라벨은 리스트 유지)
         user_raw = pd.DataFrame([{
-            '나이': input_age, '방영년도': input_year, '성별': input_gender,
-            '장르': input_genre, '배우명': input_actor, '플랫폼': input_plat, '결혼여부': input_married
+            '나이'    : input_age,
+            '성별'    : input_gender,
+            '역할'    : input_role,
+            '방영분기': input_quarter,
+            '결혼여부': input_married,
+            '연령대'  : derived_age_group,   # ← 자동 매핑 결과
+            '장르'   : input_genre,
+            '방영요일': input_week,
+            '플랫폼' : input_plat,
         }])
-        user_mlb = colab_multilabel_transform(user_raw, cols=('장르','방영요일','플랫폼'))
 
-        # Colab X 스키마와 정합(드랍 리스트 동일 적용)
+        # 4) 멀티라벨 변환 + X 스키마 정렬
+        user_mlb = colab_multilabel_transform(user_raw, cols=('장르','방영요일','플랫폼'))
         user_base = pd.concat([X_colab_base.iloc[:0].copy(), user_mlb], ignore_index=True)
         user_base = user_base.drop(columns=[c for c in drop_cols if c in user_base.columns], errors='ignore')
         user_base = user_base.tail(1)
 
-        pred = rf_pipe_full.predict(user_base)[0]
+        # 5) 예측
+        pred = model_full.predict(user_base)[0]
         st.success(f"💡 예상 평점: {pred:.2f}")

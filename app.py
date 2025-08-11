@@ -293,60 +293,89 @@ with tabs[2]:
                    log_y=True, title="연도별 주요 플랫폼 작품 수")
     st.plotly_chart(fig3, use_container_width=True)
 
-    st.subheader("멀티장르 vs 단일장르 평균 평점 (배우 단위 박스플롯)")
-    ag = (
-        pd.DataFrame({'배우명': raw_df['배우명'], '장르': raw_df['장르'].apply(clean_cell_colab)})
-        .explode('장르').groupby('배우명')['장르'].nunique()
+        # --- 장르 '개수'별 배우 평균 평점 (1/2/3/4/5+) ---
+    st.subheader("장르 개수별 평균 평점 (배우 단위, 1/2/3/4/5+)")
+    
+    # 1) 배우별 고유 장르 개수
+    gdf = (
+        pd.DataFrame({'배우명': raw_df['배우명'],
+                      '장르':  raw_df['장르'].apply(clean_cell_colab)})
+        .explode('장르')
+        .dropna(subset=['배우명','장르'])
     )
-    multi_set = set(ag[ag > 1].index)
-    label_map = {name: ('멀티장르' if name in multi_set else '단일장르') for name in ag.index}
-    actor_mean = raw_df.groupby('배우명', as_index=False)['점수'].mean().rename(columns={'점수':'배우평균점수'})
-    actor_mean['장르구분'] = actor_mean['배우명'].map(label_map)
-    fig_box = px.box(actor_mean, x='장르구분', y='배우평균점수', title="멀티장르 vs 단일장르 배우 단위 평균 점수 분포")
+    genre_cnt = gdf.groupby('배우명')['장르'].nunique().rename('장르개수')
+    
+    # 2) 배우별 평균 점수
+    actor_mean = (raw_df.groupby('배우명', as_index=False)['점수']
+                  .mean()
+                  .rename(columns={'점수':'배우평균점수'}))
+    
+    # 3) 병합 + 구간화(1,2,3,4,5+)
+    df_actor = actor_mean.merge(genre_cnt.reset_index(), on='배우명', how='left')
+    df_actor['장르개수'] = df_actor['장르개수'].fillna(0).astype(int)
+    df_actor = df_actor[df_actor['장르개수'] > 0].copy()  # 장르정보 없는 배우는 제외
+    
+    def bucket(n: int) -> str:
+        return '5개 이상' if n >= 5 else f'{n}개'
+    
+    df_actor['장르개수구간'] = df_actor['장르개수'].apply(bucket)
+    order_bins = ['1개','2개','3개','4개','5개 이상']
+    df_actor['장르개수구간'] = pd.Categorical(df_actor['장르개수구간'],
+                                          categories=order_bins, ordered=True)
+    
+    # 4) 박스플롯
+    fig_box = px.box(
+        df_actor, x='장르개수구간', y='배우평균점수',
+        category_orders={'장르개수구간': order_bins},
+        title="장르 개수별 배우 평균 점수 분포 (1/2/3/4/5+)"
+    )
     st.plotly_chart(fig_box, use_container_width=True)
-
-    # --- 그래프 아래 인사이트 자동 생성 ---
-    stats = (actor_mean.groupby('장르구분')['배우평균점수']
+    
+    # 5) 그래프 아래 인사이트 자동 생성
+    stats = (df_actor.groupby('장르개수구간')['배우평균점수']
              .agg(평균='mean', 중앙값='median', 표본수='count')
+             .reindex(order_bins)
+             .dropna(how='all')
              .round(3))
     
-    # 안전하게 키 존재 확인
-    if all(k in stats.index for k in ['단일장르','멀티장르']):
-        s_mean, m_mean = stats.loc['단일장르','평균'],   stats.loc['멀티장르','평균']
-        s_median, m_median = stats.loc['단일장르','중앙값'], stats.loc['멀티장르','중앙값']
+    if not stats.empty and stats['표본수'].sum() > 0:
+        # 가장 높은 그룹
+        best_mean_grp   = stats['평균'].idxmax()
+        best_median_grp = stats['중앙값'].idxmax()
     
-        if (s_mean >= m_mean) and (s_median >= m_median):
-            # 너가 원한 문구 그대로
-            st.markdown(
-                f"""
-    **요약 통계**  
-    - 단일장르: 평균 {s_mean:.3f}, 중앙값 {s_median:.3f} (n={int(stats.loc['단일장르','표본수'])})  
-    - 멀티장르: 평균 {m_mean:.3f}, 중앙값 {m_median:.3f} (n={int(stats.loc['멀티장르','표본수'])})
-    
-    **인사이트**
-    - 일반 배우가 오히려 평균 평점이 더 높다.  
-    - 한 장르에 주로 출연한 배우의 **평점 중앙값 및 평균이 멀티장르 배우보다 높음**.  
-    - 특정 장르에 강점을 가진 배우가 **일관성 있는 작품**을 할 때 평균 평점이 더 높다.
-                """
-            )
+        # 단조 경향(평균 기준): 증가/감소/혼합
+        vals = stats['평균'].dropna().values
+        diffs = pd.Series(vals).diff().dropna()
+        if (diffs >= 0).all():
+            trend = "장르 수가 많을수록 평균 평점이 **높아지는 경향**"
+        elif (diffs <= 0).all():
+            trend = "장르 수가 많을수록 평균 평점이 **낮아지는 경향**"
         else:
-            # 데이터가 반대로 나오면 사실대로 안내
-            higher_avg = "단일장르" if s_mean > m_mean else ("멀티장르" if m_mean > s_mean else "동일")
-            higher_med = "단일장르" if s_median > m_median else ("멀티장르" if m_median > s_median else "동일")
-            st.markdown(
-                f"""
-    **요약 통계**  
-    - 단일장르: 평균 {s_mean:.3f}, 중앙값 {s_median:.3f} (n={int(stats.loc['단일장르','표본수'])})  
-    - 멀티장르: 평균 {m_mean:.3f}, 중앙값 {m_median:.3f} (n={int(stats.loc['멀티장르','표본수'])})
+            trend = "장르 수와 평균 평점 간 **일관된 단조 경향은 약함**"
+    
+        # 1개 vs 5개 이상 비교(있을 때만)
+        comp_txt = ""
+        if {'1개','5개 이상'}.issubset(stats.index):
+            diff_mean = stats.loc['1개','평균'] - stats.loc['5개 이상','평균']
+            diff_med  = stats.loc['1개','중앙값'] - stats.loc['5개 이상','중앙값']
+            sign = "높음" if diff_mean >= 0 else "낮음"
+            comp_txt = f"- **1개 vs 5개 이상**: 평균 {abs(diff_mean):.3f}p {sign}, 중앙값 차이 {abs(diff_med):.3f}p\n"
+    
+        st.markdown(
+            f"""
+    **요약 통계(배우 단위)**  
+    {stats.to_markdown()}
     
     **인사이트**
-    - 평균 기준: **{higher_avg}** 쪽이 더 높음.  
-    - 중앙값 기준: **{higher_med}** 쪽이 더 높음.  
-    - 장르 편중/표본 수(위 표본수)를 함께 고려하여 해석 필요.
-                """
-            )
+    - 평균 기준 최고 그룹: **{best_mean_grp}** / 중앙값 기준 최고 그룹: **{best_median_grp}**  
+    - {trend}  
+    {comp_txt if comp_txt else ""}
+    - 표본수 차이를 함께 고려해 해석하세요.
+            """
+        )
     else:
-        st.info("단일/멀티 구분 중 한쪽 데이터가 부족합니다. 표본을 확인해 주세요.")
+        st.info("장르 개수 구간별 통계를 계산할 데이터가 부족합니다.")
+
 
     st.subheader("주연 배우 결혼 상태별 평균 점수 비교")
     main_roles = raw_df[raw_df['역할']=='주연'].copy()

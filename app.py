@@ -276,16 +276,12 @@ with tabs[1]:
     st.write(raw_df['점수'].astype(float).describe())
     fig,ax=plt.subplots(figsize=(6,3))
     ax.hist(raw_df['점수'].astype(float), bins=20)
-    ax.set_title("히스토그램")
+    ax.set_title("전체 평점 분포")
     st.pyplot(fig)
 
 # --- 4.3 분포/교차분석 ---
 with tabs[2]:
     st.header("분포 및 교차분석")
-    st.subheader("전체 평점 분포")
-    fig1 = px.histogram(raw_df, x='점수', nbins=20, title="전체 평점 분포")
-    st.plotly_chart(fig1, use_container_width=True)
-
     st.subheader("Top 10 평점 작품")
     top10 = raw_df.nlargest(10, '점수')[['드라마명','점수']].sort_values('점수')
     fig2 = px.bar(top10, x='점수', y='드라마명', orientation='h', text='점수', title="Top 10 평점 작품")

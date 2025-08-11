@@ -18,20 +18,8 @@ from xgboost import XGBRegressor
 from sklearn.linear_model import LinearRegression
 import plotly.express as px
 
-# 시스템 폰트 중 한글 표시 가능한 폰트 검색
-font_list = fm.findSystemFonts(fontpaths=None, fontext='ttf')
-found_font = None
-for fpath in font_list:
-    if any(name in fpath for name in ['Malgun', 'AppleGothic', 'Nanum', 'Batang', 'Gulim', 'Dotum']):
-        found_font = fpath
-        break
-
-# 찾은 폰트로 설정 (없으면 기본 DejaVu Sans 유지)
-if found_font:
-    matplotlib.rcParams['font.family'] = fm.FontProperties(fname=found_font).get_name()
-else:
-    matplotlib.rcParams['font.family'] = 'DejaVu Sans'
-
+# Windows 기본 한글 폰트 설정
+matplotlib.rcParams['font.family'] = 'Malgun Gothic'
 matplotlib.rcParams['axes.unicode_minus'] = False
 
 # =========================

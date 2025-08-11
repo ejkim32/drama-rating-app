@@ -18,9 +18,43 @@ from xgboost import XGBRegressor
 from sklearn.linear_model import LinearRegression
 import plotly.express as px
 
-# Windows 기본 한글 폰트 설정
-matplotlib.rcParams['font.family'] = 'Malgun Gothic'
-matplotlib.rcParams['axes.unicode_minus'] = False
+def set_korean_font():
+    matplotlib.rcParams['axes.unicode_minus'] = False
+
+    # 1) 프로젝트에 포함한 폰트(권장) - 파일을 여기에 두세요: ./fonts/NanumGothic.ttf
+    candidates = [
+        os.path.join(os.path.dirname(__file__), "fonts", "NanumGothic.ttf"),
+        os.path.join(os.getcwd(), "fonts", "NanumGothic.ttf"),
+    ]
+
+    # 2) Windows 기본 폰트 경로도 시도
+    if platform.system() == "Windows":
+        candidates += [
+            r"C:\Windows\Fonts\malgun.ttf",
+            r"C:\Windows\Fonts\malgunbd.ttf",
+        ]
+
+    # 3) 시스템 폰트 검색(마지막 폴백)
+    sys_fonts = fm.findSystemFonts(fontext="ttf")
+    for f in sys_fonts:
+        if any(k in f.lower() for k in ("nanum", "malgun", "applegothic", "notosanscjk", "gulim", "dotum", "batang")):
+            candidates.append(f)
+
+    # 등록 시도
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                fm.fontManager.addfont(path)  # 폰트 등록
+                family = fm.FontProperties(fname=path).get_name()
+                matplotlib.rcParams['font.family'] = family
+                return family
+            except Exception:
+                pass
+    return None
+
+family = set_korean_font()
+# 선택된 폰트를 확인하고 싶으면:
+# st.write("Using font:", family)
 
 # =========================
 # 0. 유틸리티 함수 및 클래스

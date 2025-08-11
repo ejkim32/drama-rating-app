@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 import ast
 import matplotlib
+import matplotlib.font_manager as fm
 import platform
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
@@ -17,15 +18,21 @@ from xgboost import XGBRegressor
 from sklearn.linear_model import LinearRegression
 import plotly.express as px
 
-# OS별 기본 한글 폰트 설정
-if platform.system() == 'Windows':
-    matplotlib.rcParams['font.family'] = 'Malgun Gothic'  # 윈도우
-elif platform.system() == 'Darwin':  # macOS
-    matplotlib.rcParams['font.family'] = 'AppleGothic'
-else:  # Linux/Colab
-    matplotlib.rcParams['font.family'] = 'NanumGothic'
+# 시스템 폰트 중 한글 표시 가능한 폰트 검색
+font_list = fm.findSystemFonts(fontpaths=None, fontext='ttf')
+found_font = None
+for fpath in font_list:
+    if any(name in fpath for name in ['Malgun', 'AppleGothic', 'Nanum', 'Batang', 'Gulim', 'Dotum']):
+        found_font = fpath
+        break
 
-matplotlib.rcParams['axes.unicode_minus'] = False  # 마이너스 깨짐 방지
+# 찾은 폰트로 설정 (없으면 기본 DejaVu Sans 유지)
+if found_font:
+    matplotlib.rcParams['font.family'] = fm.FontProperties(fname=found_font).get_name()
+else:
+    matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+
+matplotlib.rcParams['axes.unicode_minus'] = False
 
 # =========================
 # 0. 유틸리티 함수 및 클래스

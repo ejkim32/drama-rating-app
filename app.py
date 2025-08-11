@@ -225,7 +225,6 @@ fig_box = px.box(
     actor_mean, 
     x='장르구분', 
     y='배우평균점수',
-    points='all',  # 모든 데이터 포인트 표시
     title="멀티장르 vs 단일장르 배우 단위 평균 점수 분포"
 )
 st.plotly_chart(fig_box, use_container_width=True)

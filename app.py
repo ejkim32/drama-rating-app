@@ -5,7 +5,7 @@ from wordcloud import WordCloud
 import ast
 import matplotlib
 import matplotlib.font_manager as fm
-import platform
+import platform, os
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.metrics import r2_score, mean_squared_error

@@ -457,8 +457,23 @@ with tabs[7]:
                 gs.fit(X_train, y_train)
 
             st.subheader("베스트 결과")
-            st.json(gs.best)
+            st.json(gs.best_params_)
+            if scoring == "neg_root_mean_squared_error":
+                st.write(f"Best CV RMSE: {-gs.best_score_:.6f}")
+            else:
+                st.write(f"Best CV {scoring}: {gs.best_score_:.6f}")
 
+            y_pred = gs.predict(X_test)
+            st.write(f"Test RMSE: {rmse(y_test, y_pred):.6f}")
+            st.write(f"Test R²  : {r2_score(y_test, y_pred):.6f}")
+
+            cvres = pd.DataFrame(gs.cv_results_)
+            cols = ["rank_test_score","mean_test_score","std_test_score","mean_train_score","std_train_score","params"]
+            st.dataframe(cvres[cols].sort_values("rank_test_score").reset_index(drop=True))
+
+        # 설치가 안 되어 있을 때 XGB 알림
+        if model_name == "XGBRegressor" and not XGB_AVAILABLE:
+            st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
 
 # --- 4.9 예측 실행 (선택형 유틸 사용) ---
 with tabs[8]:

@@ -153,6 +153,8 @@ def colab_multilabel_fit_transform(df: pd.DataFrame, cols=('장르','방영요�
         new_cols = [f"{col}_{c.strip().upper()}" for c in mlb.classes_]
         out = out.drop(columns=[c for c in new_cols if c in out.columns], errors='ignore')
         out = pd.concat([out, pd.DataFrame(arr, columns=new_cols, index=out.index)], axis=1)
+         # 세션에 '학습된' mlb와 클래스 둘 다 저장
+        st.session_state[f"mlb_{col}"] = mlb
         st.session_state[f"mlb_classes_{col}"] = mlb.classes_.tolist()
     return out
 
@@ -160,12 +162,34 @@ def colab_multilabel_transform(df: pd.DataFrame, cols=('장르','방영요일','
     out = df.copy()
     for col in cols:
         out[col] = out[col].apply(clean_cell_colab)
-        classes = st.session_state.get(f"mlb_classes_{col}", [])
-        mlb = MultiLabelBinarizer(classes=classes)
-        arr = mlb.transform(out[col])
-        new_cols = [f"{col}_{c.strip().upper()}" for c in mlb.classes_]
+
+        # 1) 세션에 '학습된' mlb가 있으면 그대로 사용
+        mlb = st.session_state.get(f"mlb_{col}", None)
+
+        # 2) 없으면 classes로부터 복구 (classes_ 직접 세팅)
+        if mlb is None:
+            classes = st.session_state.get(f"mlb_classes_{col}", [])
+            mlb = MultiLabelBinarizer()
+            if classes:
+                mlb.classes_ = np.array(classes)  # ← transform이 바로 가능
+            else:
+                # 3) 그래도 없으면 df_mlb 컬럼에서 유추 (prefix 제거)
+                try:
+                    prefix = f"{col}_"
+                    labels = [c[len(prefix):] for c in df_mlb.columns if c.startswith(prefix)]
+                    if labels:
+                        mlb.classes_ = np.array(labels)
+                    else:
+                        # 마지막 폴백: 현재 입력으로 fit (이 경우 훈련 스키마와 어긋날 수 있음)
+                        mlb.fit(out[col])
+                except Exception:
+                    mlb.fit(out[col])
+
+        arr = mlb.transform(out[col])  # 이제 NotFittedError 안 남
+        new_cols = [f"{col}_{c}" for c in mlb.classes_]  # classes_ 이미 UPPER 처리됨
         out = out.drop(columns=[c for c in new_cols if c in out.columns], errors='ignore')
         out = pd.concat([out, pd.DataFrame(arr, columns=new_cols, index=out.index)], axis=1)
+
     return out
 
 # (선택) 사용자 선택 기반 X 생성 유틸 — EDA/예측 탭에서 사용

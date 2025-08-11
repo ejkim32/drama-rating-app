@@ -6,10 +6,15 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import platform
-
+from sklearn.metrics import mean_squared_error
 import streamlit as st
 import plotly.express as px
 
+
+def rmse(y_true, y_pred):
+    # squared=False 미지원 환경에서도 동작
+    return float(np.sqrt(mean_squared_error(y_true, y_pred)))
+    
 # ===== 페이지 설정 =====
 st.set_page_config(page_title="K-드라마 분석/예측", page_icon="🎬", layout="wide")
 
@@ -326,8 +331,8 @@ with tabs[6]:
 
     st.metric("Train R²", f"{r2_score(y_train,y_pred_tr):.3f}")
     st.metric("Test  R²", f"{r2_score(y_test,y_pred_te):.3f}")
-    st.metric("Train RMSE", f"{mean_squared_error(y_train,y_pred_tr,squared=False):.3f}")
-    st.metric("Test  RMSE", f"{mean_squared_error(y_test,y_pred_te,squared=False):.3f}")
+    st.metric("Train RMSE", f"{rmse(y_train,y_pred_tr):.3f}")
+    st.metric("Test  RMSE", f"{rmse(y_test,y_pred_te):.3f}")
 
 # --- 4.8 GridSearch 튜닝 (RandomForest, Colab 그리드) ---
 with tabs[7]:
@@ -356,7 +361,7 @@ with tabs[7]:
             st.write("Best CV Score:", gs.best_score_)
 
             y_pred = gs.predict(X_test)
-            st.write(f"Test RMSE: {mean_squared_error(y_test, y_pred, squared=False):.6f}")
+            st.write(f"Test RMSE: {rmse(y_test, y_pred):.6f}")
             st.write(f"Test R²  : {r2_score(y_test, y_pred):.6f}")
 
             cvres = pd.DataFrame(gs.cv_results_)

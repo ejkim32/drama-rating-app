@@ -326,7 +326,7 @@ with tabs[2]:
     g_count = dfg['장르'].value_counts()
     gdf = (pd.DataFrame({'평균 점수': g_score, '작품 수': g_count}).reset_index().rename(columns={'index':'장르'}))
     gdf = gdf.sort_values('작품 수', ascending=False).reset_index(drop=True)
-    fig, ax1 = plt.subplots(figsize=(3,3))
+    fig, ax1 = plt.subplots(figsize=(12,6))
     bars = ax1.bar(range(len(gdf)), gdf['작품 수'], color='lightgray')
     ax1.set_ylabel('작품 수'); ax1.set_xticks(range(len(gdf))); ax1.set_xticklabels(gdf['장르'], rotation=45, ha='right')
     for i, r in enumerate(bars):
@@ -347,7 +347,7 @@ with tabs[2]:
     day_ko = {'monday':'월','tuesday':'화','wednesday':'수','thursday':'목','friday':'금','saturday':'토','sunday':'일'}
     mean_by = dfe.groupby('방영요일')['점수'].mean().reindex(ordered)
     cnt_by = dfe['방영요일'].value_counts().reindex(ordered).fillna(0).astype(int)
-    fig, ax1 = plt.subplots(figsize=(3,3))
+    fig, ax1 = plt.subplots(figsize=(12,6))
     bars = ax1.bar(ordered, cnt_by.values, alpha=0.3, color='tab:gray')
     ax1.set_ylabel('작품 수', color='tab:gray'); ax1.tick_params(axis='y', labelcolor='tab:gray')
     for b in bars:
@@ -376,7 +376,7 @@ with tabs[2]:
     colors = [palette[i % len(palette)] for i in range(len(gender_counts))]
     
     # 그래프
-    fig, ax = plt.subplots(figsize=(3, 3))
+    fig, ax = plt.subplots(figsize=(12, 6))
     bars = ax.bar(gender_counts.index.astype(str), gender_counts.values, color=colors)
     
     # 라벨: 인원수 + 확률(%) 표기

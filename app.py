@@ -704,7 +704,7 @@ with st.sidebar:
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     # Card: model config
-    st.markdown('<div class="sb-card"><h4>모델 설정: test_size=0.2, random_state=42</h4>', unsafe_allow_html=True)
+    st.markdown('<div class="sb-card"><h4>모델 설정: \ntest_size=0.2, random_state=42</h4>', unsafe_allow_html=True)
     test_size = 0.2
     st.markdown('</div>', unsafe_allow_html=True)  # /sb-card
     st.markdown('</div>', unsafe_allow_html=True)  # /sb-menu

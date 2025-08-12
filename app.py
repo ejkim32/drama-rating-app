@@ -305,19 +305,7 @@ def _set_nav_query(slug: str):
     else:
         st.experimental_set_query_params(nav=slug)
 
-# ---------- Topbar ----------
-st.markdown("""
-<div class="topbar">
-  <div>
-    <div class="title">케미스코어</div>
-    <div class="crumb">HOME · DASHBOARD</div>
-  </div>
-  <div class="top-right">
-    <div class="chip">📢 알림</div>
-    <div class="chip">🙂 사용자</div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
+
 
 # ---------- 각 페이지 ----------
 def page_overview():

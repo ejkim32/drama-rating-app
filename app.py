@@ -435,7 +435,7 @@ with tabs[2]:
     main_roles = raw_df[raw_df['role']=='주연'].copy()
     main_roles['결혼상태'] = main_roles['married'].apply(lambda x: '미혼' if x=='미혼' else '미혼 외')
     avg_scores_by_marriage = main_roles.groupby('결혼상태')['score'].mean()
-    fig, ax = plt.subplots(figsize=(2, 2))  # 크기 줄임
+    fig, ax = plt.subplots(figsize=(6, 6))  # 크기 줄임
     bars = ax.bar(avg_scores_by_marriage.index, avg_scores_by_marriage.values, 
                   color=['mediumseagreen', 'gray'])
     

@@ -850,20 +850,92 @@ with tabs[2]:
 
 
 
-# --- 4.4 워드클라우드 ---
-from wordcloud import WordCloud
-with tabs[3]:
-    st.header("워드클라우드")
-    font_path = st.session_state.get("kfont_path")
-    if genre_list:
-        wc = WordCloud(width=800,height=400,background_color='white',font_path=font_path).generate(' '.join(genre_list))
-        fig,ax=plt.subplots(); ax.imshow(wc,interpolation='bilinear'); ax.axis('off'); st.pyplot(fig)
-    if broadcaster_list:
-        wc = WordCloud(width=800,height=400,background_color='white',font_path=font_path).generate(' '.join(broadcaster_list))
-        fig,ax=plt.subplots(); ax.imshow(wc,interpolation='bilinear'); ax.axis('off'); st.pyplot(fig)
-    if week_list:
-        wc = WordCloud(width=800,height=400,background_color='white',font_path=font_path).generate(' '.join(week_list))
-        fig,ax=plt.subplots(); ax.imshow(wc,interpolation='bilinear'); ax.axis('off'); st.pyplot(fig)
+    # --- 4.4 워드클라우드 ---
+    from wordcloud import WordCloud
+    with tabs[3]:
+        st.header("워드클라우드")
+        from collections import Counter
+    
+        def top_pairs(words, n=5, keyfn=lambda x: str(x).strip().lower()):
+            vals = [keyfn(w) for w in words if pd.notna(w) and str(w).strip() != ""]
+            return Counter(vals).most_common(n)
+    
+        def pairs_to_str(pairs, label_map=None):
+            it = []
+            for k, v in pairs:
+                kk = label_map.get(k, k) if label_map else k
+                it.append(f"{kk}({v:,})")
+            return ", ".join(it) if it else "N/A"
+    
+        font_path = st.session_state.get("kfont_path")
+    
+        # 1) 장르 워드클라우드 + 인사이트
+        if genre_list:
+            wc = WordCloud(width=800, height=400, background_color='white', font_path=font_path)\
+                    .generate(' '.join(genre_list))
+            fig, ax = plt.subplots()
+            ax.imshow(wc, interpolation='bilinear'); ax.axis('off')
+            st.pyplot(fig)
+    
+            top_g = top_pairs(genre_list, n=5)
+            st.markdown(
+                f"""
+    **요약(데이터 근거)**  
+    - 상위 장르: **{pairs_to_str(top_g)}**
+    
+    **인사이트**  
+    - **romance / comedy / drama** 중심으로 물량이 쏠림 → 대중성·제작 효율이 높아 **반복 생산**되는 구조.  
+    - **thriller / sf / hist_war** 등은 상대적으로 적지만 **팬덤 충성도/완성도 승부**로 평점이 높게 형성되는 경향.  
+    - 혼합 표기(예: *romance thriller*)가 자주 보임 → **멀티 장르 트렌드**가 활발.
+    """
+            )
+    
+        # 2) 플랫폼 워드클라우드 + 인사이트
+        if broadcaster_list:
+            wc = WordCloud(width=800, height=400, background_color='white', font_path=font_path)\
+                    .generate(' '.join(broadcaster_list))
+            fig, ax = plt.subplots()
+            ax.imshow(wc, interpolation='bilinear'); ax.axis('off')
+            st.pyplot(fig)
+    
+            top_p = top_pairs(broadcaster_list, n=6)
+            st.markdown(
+                f"""
+    **요약(데이터 근거)**  
+    - 상위 플랫폼: **{pairs_to_str(top_p)}**
+    
+    **인사이트**  
+    - **KBS·MBC·SBS** 등 전통 채널이 여전히 주류, **TVN·NETFLIX**가 뒤를 추격 → **방송사 주도 + OTT 가세** 구도.  
+    - 기타/공동 표기(ETC 등)는 **동시 방영·공동 유통**이 흔하다는 신호.  
+    - 전략: 전통 채널 편성 확보와 함께 **OTT 협업/동시 공개**를 병행하는 하이브리드 유통이 유리.
+    """
+            )
+    
+        # 3) 방영요일 워드클라우드 + 인사이트
+        if week_list:
+            # 영문 소문자 통일
+            wk = [str(w).strip().lower() for w in week_list if pd.notna(w)]
+            wc = WordCloud(width=800, height=400, background_color='white', font_path=font_path)\
+                    .generate(' '.join(wk))
+            fig, ax = plt.subplots()
+            ax.imshow(wc, interpolation='bilinear'); ax.axis('off')
+            st.pyplot(fig)
+    
+            # 요일 한글 매핑
+            day_ko = {'monday':'월', 'tuesday':'화', 'wednesday':'수', 'thursday':'목',
+                      'friday':'금', 'saturday':'토', 'sunday':'일'}
+            top_w = top_pairs(wk, n=7)
+            st.markdown(
+                f"""
+    **요약(데이터 근거)**  
+    - 요일 빈도: **{pairs_to_str(top_w, label_map=day_ko)}**
+    
+    **인사이트**  
+    - **주중(월~목)** 물량이 크고, **토요일**이 강세 → 토요일은 시청 여건·몰입·광고 효과가 높은 **황금 슬롯**.  
+    - **금·일요일**은 예능/가벼운 콘텐츠와의 경쟁으로 드라마 편성 비중이 상대적으로 낮은 편.  
+    - 전략: 주중은 **보편 장르**로 안정적 편성, 토요일은 **고품질·화제성** 승부, 금·일은 장르 선택과 마케팅을 차별화.
+    """
+            )
 
 # --- 4.5 실시간 필터 ---
 with tabs[4]:

@@ -456,6 +456,22 @@ with tabs[2]:
     ax.set_ylim(min(avg_scores_by_marriage.values)-0.05, max(avg_scores_by_marriage.values)+0.05)
     ax.grid(axis='y', linestyle='--', alpha=0.5)
     st.pyplot(fig)
+    # --- 그래프 아래 인사이트 ---
+    m_single = avg_scores_by_marriage.get('미혼')
+    m_else   = avg_scores_by_marriage.get('미혼 외')
+    diff_txt = f"(차이 {m_single - m_else:+.3f}p)" if (m_single is not None and m_else is not None) else ""
+    
+    st.markdown(
+        f"""
+    **요약**
+    - 미혼 평균: **{m_single:.3f}**, 미혼 외 평균: **{m_else:.3f}** {diff_txt}
+    
+    **인사이트**
+    - 미혼 배우는 상대적으로 **청춘물·로맨틱 코미디·성장형 서사**에 자주 등장하며, 이런 장르는 시청자 선호도와 감정 이입률이 높아 **평점이 우호적으로 형성**되는 경향이 있습니다.
+    - 반면, 기혼 배우는 **가족극·사회극·정치물**에 출연하는 비중이 높고, 이들 장르는 주제의 무게감/몰입 장벽으로 **평가가 갈릴 가능성**이 큽니다.
+    - 시청자 인식에서 ‘**싱글**’ 이미지는 보다 자유롭고 다양한 캐릭터 소비로 이어지기 쉬워, **연애 서사 몰입도**나 **대중적 판타지 자극** 역할이 미혼 배우에게 더 자주 부여되는 편입니다.
+    """
+    )
 
     st.subheader("장르별 작품 수 및 평균 점수")
     dfg = raw_df.copy(); dfg['장르'] = dfg['장르'].apply(clean_cell_colab)
@@ -589,6 +605,51 @@ with tabs[2]:
     plt.title('방영년도별 작품 수 및 평균 점수')
     plt.tight_layout()
     st.pyplot(fig)
+
+    # 유효 연도만 선택
+    valid_mask = mean_s.notna() & count_s.notna()
+    yrs   = pd.Index(years)[valid_mask]
+    cnt   = count_s[valid_mask].astype(float)
+    meanv = mean_s[valid_mask].astype(float)
+    
+    # (1) 전체 구간 상관계수
+    r_all = float(np.corrcoef(cnt.values, meanv.values)[0, 1]) if len(yrs) >= 2 else np.nan
+    
+    # (2) 2017년 이후 상관계수 (데이터 있으면)
+    mask_2017 = yrs >= 2017
+    if mask_2017.any() and mask_2017.sum() >= 2:
+        r_2017 = float(np.corrcoef(cnt[mask_2017].values, meanv[mask_2017].values)[0, 1])
+    else:
+        r_2017 = np.nan
+    
+    # (3) CAGR(작품 수) - 전체 / 2017→마지막
+    def calc_cagr(series: pd.Series, start_year: int, end_year: int):
+        if start_year in series.index and end_year in series.index:
+            start, end = float(series.loc[start_year]), float(series.loc[end_year])
+            n = int(end_year - start_year)
+            if start > 0 and n > 0:
+                return (end / start) ** (1 / n) - 1
+        return np.nan
+    
+    first_year, last_year = int(yrs.min()), int(yrs.max())
+    cagr_all   = calc_cagr(count_s, first_year, last_year)
+    cagr_2017  = calc_cagr(count_s, max(2017, first_year), last_year)
+    
+    # (4) 요약 표시
+    st.markdown("**추가 통계 요약**")
+    st.markdown(
+        f"""
+    - 전체 기간 상관계수 r(작품 수 vs 평균 점수): **{r_all:.3f}**  
+    - 2017년 이후 상관계수 r: **{r_2017:.3f}**  
+    - 작품 수 CAGR(전체 {first_year}→{last_year}): **{(cagr_all*100):.2f}%/년**  
+    - 작품 수 CAGR(2017→{last_year}): **{(cagr_2017*100):.2f}%/년**
+    """
+    )
+    
+    # (선택) 해석 한 줄
+    if not np.isnan(r_2017):
+        trend = "음(-)의" if r_2017 < 0 else "양(+)의"
+        st.caption(f"메모: 2017년 이후 구간에서 작품 수와 평균 점수는 **{trend} 상관**을 보입니다.")
 
     # --- 연령대별 작품 수 & 성별 평균 점수 (주연 배우 기준) ---
     st.subheader("연령대별 작품 수 및 성별 평균 점수 (주연 배우 기준)")

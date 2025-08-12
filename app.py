@@ -449,7 +449,6 @@ with st.sidebar:
 # 페이지 함수들
 # ==============================
 def page_overview():
-    topbar("케미스코어 · 대시보드", "HOME ▸ DASHBOARD")
 
     # --- KPI 4장 ---
     st.markdown('<div class="chem-row">', unsafe_allow_html=True)

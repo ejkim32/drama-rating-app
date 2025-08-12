@@ -17,7 +17,7 @@ from sklearn.metrics import mean_squared_error
 import streamlit as st
 import plotly.express as px
 from sklearn.neighbors import KNeighborsRegressor
-from sklearn.linear import LinearRegression, Ridge, Lasso, ElasticNet, SGDRegressor
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet, SGDRegressor
 from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler

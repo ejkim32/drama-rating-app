@@ -966,14 +966,22 @@ with tabs[8]:
         input_married = st.selectbox("결혼여부", married_opts) if married_opts else st.text_input("결혼여부 입력", "")
         input_genre   = st.multiselect("장르 (멀티 선택)", genre_opts, default=genre_opts[:1] if genre_opts else [])
 
+        # 나이 → 연령대 자동 산출 + 장르 개수 구간 라벨
         derived_age_group = age_to_age_group(int(input_age))
-        if len(input_genre) == 0:
-            genre_group_label = "장르없음"
-        elif len(input_genre) == 1:
-            genre_group_label = "단일장르"
+        
+        n_genre = len(input_genre)
+        if n_genre == 0:
+            genre_bucket = "장르없음"
+        elif n_genre <= 2:
+            genre_bucket = "1~2개"
+        elif n_genre <= 4:
+            genre_bucket = "3~4개"
+        elif n_genre <= 6:
+            genre_bucket = "5~6개"
         else:
-            genre_group_label = "멀티장르"
-        st.caption(f"자동 연령대: **{derived_age_group}**  |  장르구분: **{genre_group_label}**")
+            genre_bucket = "7개 이상"
+        
+        st.caption(f"자동 연령대: **{derived_age_group}**  |  장르 개수: **{genre_bucket}**")
 
     with col_right:
         st.markdown("**② 편성 특성**")

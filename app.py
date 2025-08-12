@@ -142,7 +142,7 @@ unique_genres = sorted(set(genre_list))
 # ===== 사이드बार =====
 with st.sidebar:
     st.header("🤖 모델 설정")
-    test_size = st.slider('테스트셋 비율', 0.1, 0.5, 0.3, 0.05)
+    test_size = st.slider('테스트셋 비율', 0.1, 0.2, 0.3, 0.05)
     feature_cols = st.multiselect(
         '특성 선택(예측 탭용)',
         ['age','start airing','gender','genres','배우명','network','married'],

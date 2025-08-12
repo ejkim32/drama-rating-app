@@ -84,6 +84,11 @@ _ = ensure_korean_font()
 
 # ====== Global UI (Topbar + Cards) ======
 def _inject_global_css():
+    # 중복 주입 방지
+    if st.session_state.get("_chem_css_injected"):
+        return
+    st.session_state["_chem_css_injected"] = True
+    
     st.markdown("""
     <style>
       /* ↑ 제목 공간 살짝 더 확보 */

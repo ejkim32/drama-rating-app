@@ -86,13 +86,17 @@ _ = ensure_korean_font()
 def _inject_global_css():
     st.markdown("""
     <style>
-      /* 전체 패딩을 조금 더 주어 h1이 안 잘리게 */
-      .block-container{padding-top:2.2rem; padding-bottom:2rem; overflow:visible;}
+      /* ↑ 제목 공간 살짝 더 확보 */
+      .block-container{
+        padding-top:3.0rem;   /* ← 2.2rem → 3.0rem 로 증가 */
+        padding-bottom:2rem;
+        overflow:visible;
+      }
 
       /* 제목(h1) 크기/라인 높이 조정 */
       h1{
-        font-weight:700;
-        font-size:30px;      /* 필요시 26~30 사이로 조절 */
+        font-weight:800;
+        font-size:28px;      /* 필요시 26~30 사이로 조절 */
         line-height:1.2;
         margin:0 0 .5rem 0;  /* 아래 여백만 */
         overflow:visible;
@@ -104,7 +108,7 @@ def _inject_global_css():
         position:sticky; top:0; z-index:9;
         background:#f7fafc; border-bottom:1px solid #EAECF0;
         padding:10px 14px;
-        margin:.25rem -1rem 1rem -1rem; /* ← 상단 여백 + 가로 풀블리드 유지 */
+        margin:.5rem -1rem 1rem -1rem; /* ← 상단 여백 + 가로 풀블리드 유지 */
       }
       .chem-toprow{display:flex; align-items:center; gap:12px; justify-content:space-between;}
       .chem-brand{display:flex; align-items:center; gap:8px; font-weight:800; font-size:18px;}

@@ -129,7 +129,7 @@ def age_to_age_group(age: int) -> str:
 # ===== 학습 데이터/전처리 객체 생성 =====
 raw_df = load_data("drama_d.json")
 
-# include_year=True → 'start airing'을 입력 특성에 포함 (현재 앱 설정과 일치)
+# include_year=False → 'start airing'을 입력 특성에 포함 (현재 앱 설정과 일치)
 X_colab_base, y_all, preprocessor, drop_cols, df_mlb, cat_cols, ohe_categories = \
     build_training_objects(raw_df, state=st.session_state, include_year=True)
 

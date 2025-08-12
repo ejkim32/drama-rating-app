@@ -449,8 +449,272 @@ with tabs[2]:
     ax.set_xlabel('결혼 상태', fontsize=9)
     ax.set_ylim(min(avg_scores_by_marriage.values)-0.05, max(avg_scores_by_marriage.values)+0.05)
     ax.grid(axis='y', linestyle='--', alpha=0.5)
+    st.pyplot(fig)
     
     st.pyplot(fig, use_container_width=False)
+    m_single = avg_scores_by_marriage.get('미혼')
+    m_else   = avg_scores_by_marriage.get('미혼 외')
+    diff_txt = f"(차이 {m_single - m_else:+.3f}p)" if (m_single is not None and m_else is not None) else ""
+    st.markdown(
+        f"""
+**요약**
+- 미혼 평균: **{m_single:.3f}**, 미혼 외 평균: **{m_else:.3f}** {diff_txt}
+
+**인사이트**
+- 미혼 배우는 상대적으로 **청춘물·로맨틱 코미디·성장형 서사**에 자주 등장하며, 이런 장르는 시청자 선호도와 감정 이입률이 높아 **평점이 우호적으로 형성**되는 경향이 있습니다.
+- 반면, 기혼 배우는 **가족극·사회극·정치물**에 출연하는 비중이 높고, 이들 장르는 주제의 무게감/몰입 장벽으로 **평가가 갈릴 가능성**이 큽니다.
+- 시청자 인식에서 ‘**싱글**’ 이미지는 보다 자유롭고 다양한 캐릭터 소비로 이어지기 쉬워, **연애 서사 몰입도**나 **대중적 판타지 자극** 역할이 미혼 배우에게 더 자주 부여되는 편입니다.
+"""
+    )
+
+    # --- 장르별 작품 수 및 평균 점수 (FIX) ---
+    st.subheader("장르별 작품 수 및 평균 점수")
+    
+    dfg = raw_df.copy()
+    dfg['genres'] = dfg['genres'].apply(clean_cell_colab)
+    dfg = dfg.explode('genres').dropna(subset=['genres','score'])
+    
+    g_score = dfg.groupby('genres')['score'].mean().round(3)
+    g_count = dfg['genres'].value_counts()
+    
+    # 인덱스->열 변환 후, 이름 컬럼을 '장르'로 통일
+    gdf = pd.DataFrame({'평균 점수': g_score, '작품 수': g_count}).reset_index()
+    name_col = 'index' if 'index' in gdf.columns else ('genres' if 'genres' in gdf.columns else gdf.columns[0])
+    gdf = gdf.rename(columns={name_col: '장르'})
+    
+    gdf = gdf.sort_values('작품 수', ascending=False).reset_index(drop=True)
+    
+    fig, ax1 = plt.subplots(figsize=(12,6))
+    bars = ax1.bar(range(len(gdf)), gdf['작품 수'], color='lightgray')
+    ax1.set_ylabel('작품 수')
+    ax1.set_xticks(range(len(gdf)))
+    ax1.set_xticklabels(gdf['장르'], rotation=45, ha='right')
+    
+    for i, r in enumerate(bars):
+        h = r.get_height()
+        ax1.text(i, h+max(2, h*0.01), f'{int(h)}', ha='center', va='bottom',
+                 fontsize=10, fontweight='bold', color='#444')
+    
+    ax2 = ax1.twinx()
+    ax2.plot(range(len(gdf)), gdf['평균 점수'], marker='o', linewidth=2, color='tab:blue')
+    ax2.set_ylabel('평균 점수', color='tab:blue')
+    ax2.tick_params(axis='y', colors='tab:blue')
+    ax2.set_ylim(gdf['평균 점수'].min()-0.1, gdf['평균 점수'].max()+0.1)
+    
+    for i, v in enumerate(gdf['평균 점수']):
+        ax2.text(i, v+0.01, f'{v:.3f}', ha='center', va='bottom',
+                 fontsize=10, fontweight='bold', color='tab:blue')
+    
+    plt.title('장르별 작품 수 및 평균 점수')
+    ax1.set_xlabel('장르')
+    ax1.grid(axis='y', linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    st.pyplot(fig)
+
+
+    # 요약 + 인사이트
+    top_cnt = gdf.nlargest(3, '작품 수')
+    low_cnt = gdf.nsmallest(3, '작품 수')
+    top_score = gdf.nlargest(4, '평균 점수')
+    def fmt_counts(df): return ", ".join([f"{r['장르']}({int(r['작품 수']):,}편)" for _, r in df.iterrows()])
+    def fmt_scores(df): return ", ".join([f"{r['장르']}({r['평균 점수']:.3f})" for _, r in df.iterrows()])
+    st.markdown(
+        f"""
+**요약(데이터 근거)**  
+- 작품 수 상위: **{fmt_counts(top_cnt)}**  
+- 작품 수 하위: **{fmt_counts(low_cnt)}**  
+- 평균 평점 상위: **{fmt_scores(top_score)}**
+
+**인사이트(생산량)**  
+- **romance / drama / comedy**는 보편적 감정선과 일상 배경으로 **비용 대비 효율**이 높고, 폭넓은 시청층을 확보하기 좋아 **반복 제작**이 이루어집니다.  
+- **action / sf / hist_war**는 CG·무술·대규모 세트·역사 고증 등으로 **제작비·제작기간 부담**이 커 상대적으로 **물량이 적은** 편입니다.
+
+**인사이트(평점)**  
+- **hist_war, thriller, sf**는 마니아층 중심으로 **완성도와 개성**이 평가 포인트가 되며 **평점이 높게 형성**되는 경향이 있습니다.  
+- 반면 **romance, society**는 감정 서사의 반복으로 중후반 전개에 따라 **호불호**가 커져 평균 점수가 상대적으로 낮아질 수 있습니다.  
+- **action / sf**는 시각적 임팩트가 커 OTT/온라인 시청 환경에서 **초기 만족도(첫인상 효과)**가 높게 나타나 평균 점수를 끌어올리기도 합니다.
+"""
+    )
+
+    # 방영 요일별 작품 수 및 평균 점수 (day / score)
+    st.subheader("방영 요일별 작품 수 및 평균 점수 (월→일)")
+    dfe = raw_df.copy(); dfe['day'] = dfe['day'].apply(clean_cell_colab)
+    dfe = dfe.explode('day').dropna(subset=['day','score']).copy()
+    dfe['day'] = dfe['day'].astype(str).str.strip().str.lower()
+    ordered = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
+    day_ko = {'monday':'월','tuesday':'화','wednesday':'수','thursday':'목','friday':'금','saturday':'토','sunday':'일'}
+    mean_by = dfe.groupby('day')['score'].mean().reindex(ordered)
+    cnt_by = dfe['day'].value_counts().reindex(ordered).fillna(0).astype(int)
+    fig, ax1 = plt.subplots(figsize=(12,6))
+    bars = ax1.bar(ordered, cnt_by.values, alpha=0.3, color='tab:gray')
+    ax1.set_ylabel('작품 수', color='tab:gray'); ax1.tick_params(axis='y', labelcolor='tab:gray')
+    for b in bars:
+        h = b.get_height(); ax1.text(b.get_x()+b.get_width()/2, h+0.5, f'{int(h)}', ha='center', va='bottom', fontsize=9, color='black')
+    ax2 = ax1.twinx(); ax2.plot(ordered, mean_by.values, marker='o', color='tab:blue')
+    ax2.set_ylabel('평균 점수', color='tab:blue'); ax2.tick_params(axis='y', labelcolor='tab:blue')
+    if mean_by.notna().any(): ax2.set_ylim(mean_by.min()-0.05, mean_by.max()+0.05)
+    for x, yv in zip(ordered, mean_by.values):
+        if pd.notna(yv): ax2.text(x, yv+0.005, f'{yv:.3f}', color='tab:blue', fontsize=9, ha='center')
+    ax1.set_xticks(ordered); ax1.set_xticklabels([day_ko[d] for d in ordered])
+    plt.title('방영 요일별 작품 수 및 평균 점수 (월요일 → 일요일 순)'); plt.tight_layout(); st.pyplot(fig)
+
+    weekday = ['monday','tuesday','wednesday','thursday']
+    weekend = ['friday','saturday','sunday']
+    wk_avg = mean_by.loc[weekday].mean(skipna=True)
+    we_avg = mean_by.loc[weekend].mean(skipna=True)
+    top_day_en  = mean_by.idxmax() if mean_by.notna().any() else None
+    top_day_ko  = day_ko.get(top_day_en, "N/A") if top_day_en else "N/A"
+    top_mean    = float(mean_by.max()) if mean_by.notna().any() else float("nan")
+    wk_cnt = int(cnt_by.loc[weekday].sum()); we_cnt = int(cnt_by.loc[weekend].sum())
+
+    st.markdown(
+        f"""
+**요약(데이터 근거)**  
+- 주중 평균 평점(월~목): **{wk_avg:.3f}** · 주중 작품 수 합계: **{wk_cnt}편**  
+- 주말 평균 평점(금~일): **{we_avg:.3f}** · 주말 작품 수 합계: **{we_cnt}편**  
+- 평균 평점 최고 요일: **{top_day_ko} {top_mean:.3f}점**
+
+**인사이트(요약)**  
+- **주중(월~목)**: 일상 편성 비중이 높고, 다양한 연령/취향을 겨냥한 **보편적 콘텐츠**가 많음. 제작 속도·양산성, **시청률 지향** 편성이 상대적으로 두드러짐.  
+- **금요일**: 한 주 피로/외부 일정 영향으로 **실시간 시청 집중도 낮음** → 예능·뉴스·영화 대체 편성 빈도 높음.  
+- **일요일**: 다음 날 출근 부담으로 **가벼운 콘텐츠 선호**, 전통적으로 예능이 프라임을 장악 → 드라마 **편성 수요 낮음**.  
+- **토요일**: 시간적 여유 + 다음 날 휴식으로 **시청률·몰입·광고 효과 최대**. 고품질 작품을 집중 투입하는 **황금 슬롯**.
+"""
+    )
+
+
+    # --- 방영년도별 작품 수 및 평균 점수 ---
+    st.subheader("방영년도별 작품 수 및 평균 점수")
+    dfe = raw_df.copy()
+    dfe['start airing'] = pd.to_numeric(dfe['start airing'], errors='coerce')
+    dfe['score'] = pd.to_numeric(dfe['score'], errors='coerce')
+    dfe = dfe.dropna(subset=['start airing','score']).copy()
+    dfe['start airing'] = dfe['start airing'].astype(int)
+
+    mean_score_by_year = dfe.groupby('start airing')['score'].mean().round(3)
+    count_by_year      = dfe['start airing'].value_counts()
+    years = sorted(set(mean_score_by_year.index) | set(count_by_year.index))
+    mean_s = mean_score_by_year.reindex(years)
+    count_s = count_by_year.reindex(years, fill_value=0)
+
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+    color_bar = 'tab:gray'
+    ax1.set_xlabel('방영년도')
+    ax1.set_ylabel('작품 수', color=color_bar)
+    bars = ax1.bar(years, count_s.values, alpha=0.3, color=color_bar, width=0.6)
+    ax1.tick_params(axis='y', labelcolor=color_bar)
+    for bar in bars:
+        h = bar.get_height()
+        ax1.text(bar.get_x() + bar.get_width()/2, h + max(0.5, h*0.02),
+                 f'{int(h)}', ha='center', va='bottom', fontsize=9, color='black')
+
+    ax2 = ax1.twinx()
+    color_line = 'tab:blue'
+    ax2.set_ylabel('평균 점수', color=color_line)
+    ax2.plot(years, mean_s.values, marker='o', color=color_line)
+    ax2.tick_params(axis='y', labelcolor=color_line)
+    if mean_s.notna().any():
+        ax2.set_ylim(mean_s.min() - 0.05, mean_s.max() + 0.05)
+    for x, y in zip(years, mean_s.values):
+        if pd.notna(y):
+            ax2.text(x, y + 0.01, f'{y:.3f}', color=color_line, fontsize=9, ha='center')
+
+    plt.title('방영년도별 작품 수 및 평균 점수')
+    plt.tight_layout()
+    st.pyplot(fig)
+
+    # 상관/성장 요약
+    valid_mask = mean_s.notna() & count_s.notna()
+    yrs   = pd.Index(years)[valid_mask]
+    cnt   = count_s[valid_mask].astype(float)
+    meanv = mean_s[valid_mask].astype(float)
+    r_all = float(np.corrcoef(cnt.values, meanv.values)[0, 1]) if len(yrs) >= 2 else np.nan
+    mask_2017 = yrs >= 2017
+    if mask_2017.any() and mask_2017.sum() >= 2:
+        r_2017 = float(np.corrcoef(cnt[mask_2017].values, meanv[mask_2017].values)[0, 1])
+    else:
+        r_2017 = np.nan
+
+    def calc_cagr(series: pd.Series, start_year: int, end_year: int):
+        if start_year in series.index and end_year in series.index:
+            start, end = float(series.loc[start_year]), float(series.loc[end_year])
+            n = int(end_year - start_year)
+            if start > 0 and n > 0:
+                return (end / start) ** (1 / n) - 1
+        return np.nan
+
+    first_year, last_year = int(yrs.min()), int(yrs.max())
+    cagr_all   = calc_cagr(count_s, first_year, last_year)
+    cagr_2017  = calc_cagr(count_s, max(2017, first_year), last_year)
+
+    st.markdown("**추가 통계 요약**")
+    st.markdown(
+        f"""
+- 전체 기간 상관계수 r(작품 수 vs 평균 점수): **{r_all:.3f}**  
+- 2017년 이후 상관계수 r: **{r_2017:.3f}**  
+- 작품 수 CAGR(전체 {first_year}→{last_year}): **{(cagr_all*100):.2f}%/년**  
+- 작품 수 CAGR(2017→{last_year}): **{(cagr_2017*100):.2f}%/년**
+"""
+    )
+    if not np.isnan(r_2017):
+        trend = "음(-)의" if r_2017 < 0 else "양(+)의"
+        st.caption(f"메모: 2017년 이후 구간에서 작품 수와 평균 점수는 **{trend} 상관**을 보입니다.")
+
+    # 연령대별 작품 수 & 성별 평균 점수 (age_group / gender / score)
+    st.subheader("연령대별 작품 수 및 성별 평균 점수 (주연 배우 기준)")
+    main_roles = raw_df.copy()
+    main_roles = main_roles[main_roles['role'] == '주연']
+    main_roles = main_roles.dropna(subset=['age_group','gender','score']).copy()
+    main_roles['score'] = pd.to_numeric(main_roles['score'], errors='coerce')
+    main_roles = main_roles.dropna(subset=['score'])
+
+    def age_key(s: str):
+        m = re.search(r'(\d+)', str(s))
+        return int(m.group(1)) if m else 999
+
+    age_order = sorted(main_roles['age_group'].astype(str).unique(), key=age_key)
+    age_counts = (main_roles['age_group'].value_counts().reindex(age_order).fillna(0).astype(int))
+    ga = (main_roles.groupby(['gender','age_group'])['score'].mean().round(3).reset_index())
+    male_vals   = ga[ga['gender']=='남자'].set_index('age_group').reindex(age_order)['score']
+    female_vals = ga[ga['gender']=='여자'].set_index('age_group').reindex(age_order)['score']
+
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    bars = ax1.bar(age_order, age_counts.values, color='lightgray', label='작품 수')
+    ax1.set_ylabel('작품 수', fontsize=12)
+    ax1.set_ylim(0, max(age_counts.max()*1.2, age_counts.max()+2))
+    for rect in bars:
+        h = rect.get_height()
+        ax1.text(rect.get_x()+rect.get_width()/2, h + max(2, h*0.02),
+                 f'{int(h)}', ha='center', va='bottom', fontsize=10, fontweight='bold')
+
+    ax2 = ax1.twinx()
+    line1, = ax2.plot(age_order, male_vals.values, marker='o', linewidth=2, label='남자')
+    line2, = ax2.plot(age_order, female_vals.values, marker='o', linewidth=2, label='여자')
+    ax2.set_ylabel('평균 점수', fontsize=12)
+
+    all_means = pd.concat([male_vals, female_vals]).dropna()
+    if not all_means.empty:
+        ymin = float(all_means.min()) - 0.05
+        ymax = float(all_means.max()) + 0.05
+        if ymin == ymax:
+            ymin, ymax = ymin-0.05, ymax+0.05
+        ax2.set_ylim(ymin, ymax)
+
+    for x, y in zip(age_order, male_vals.values):
+        if not np.isnan(y):
+            ax2.text(x, y + 0.004, f'{y:.3f}', color=line1.get_color(),
+                     ha='center', va='bottom', fontsize=10, fontweight='bold')
+    for x, y in zip(age_order, female_vals.values):
+        if not np.isnan(y):
+            ax2.text(x, y + 0.004, f'{y:.3f}', color=line2.get_color(),
+                     ha='center', va='bottom', fontsize=10, fontweight='bold')
+
+    plt.title('연령대별 작품 수 및 성별 평균 점수 (주연 배우 기준)', fontsize=14)
+    ax1.set_xlabel('연령대', fontsize=12)
+    ax1.grid(axis='y', linestyle='--', alpha=0.4)
+    ax1.legend([line1, line2], ['남자','여자'], loc='upper left')
+    plt.tight_layout()
+    st.pyplot(fig)
 
 # --- 4.4 워드클라우드 ---
 from wordcloud import WordCloud

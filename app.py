@@ -1,3 +1,42 @@
+# app.py
+# ---- dependency guard (optional) ----
+import importlib.util, streamlit as st
+_missing = [m for m in ("numpy","scipy","sklearn","joblib","threadpoolctl","xgboost") if importlib.util.find_spec(m) is None]
+if _missing:
+    st.error(f"필수 라이브러리 미설치: {_missing}. requirements.txt / runtime.txt 버전을 고정해 재배포하세요.")
+    st.stop()
+
+import os
+import ast
+import random
+import numpy as np
+import pandas as pd
+from pathlib import Path
+import platform
+from sklearn.metrics import mean_squared_error
+import streamlit as st
+import plotly.express as px
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet, SGDRegressor
+from sklearn.svm import SVR
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.base import clone
+import re
+from sklearn.model_selection import KFold
+from sklearn.impute import SimpleImputer
+
+# XGB가 설치돼 있으면 쓰도록 안전하게 추가
+try:
+    from xgboost import XGBRegressor
+    XGB_AVAILABLE = True
+except Exception:
+    XGB_AVAILABLE = False
+
+def rmse(y_true, y_pred):
+    return float(np.sqrt(mean_squared_error(y_true, y_pred)))
+
+
 # ===== 사이드바 네비게이션 =====
 st.title("💞 케미스코어")
 

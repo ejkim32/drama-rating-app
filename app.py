@@ -761,10 +761,10 @@ with st.sidebar:
     font-weight: 900;
 }
 .sb-brand .logo {
-    font-size: 36px;  /* 이모티콘 크기 */
+    font-size: 55px;  /* 이모티콘 크기 */
 }
 .sb-brand .name {
-    font-size: 28px;  /* 글자 크기 */
+    font-size: 50px;  /* 글자 크기 */
 }
 </style>
 <div class="sb-brand">

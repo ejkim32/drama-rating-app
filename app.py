@@ -235,13 +235,27 @@ df_mlb = colab_multilabel_fit_transform(raw_df, cols=('genres','day','network'))
 
 
 # ===== Colab 스타일 X/y, 전처리 정의 =====
-drop_cols = [c for c in ['배우명','드라마명','genres','day','network','score','start airing'] if c in df_mlb.columns]  # start airing 포함
-X_colab_base = df_mlb.drop(columns=drop_cols, errors='ignore')
-y_all = df_mlb['score']
+drop_cols = [c for c in ['배우명','드라마명','genres','day','network','score','start airing'] if c in df_mlb.columns]
+X_colab_base = df_mlb.drop(columns=drop_cols, errors='ignore').copy()
+y_all = pd.to_numeric(df_mlb['score'], errors='coerce').copy()
 
+# 컬럼 순서 고정
+X_colab_base = X_colab_base.reindex(sorted(X_colab_base.columns), axis=1)
+
+# OHE 카테고리 고정
 categorical_features = [c for c in ['role','gender','air_q','married','age_group'] if c in X_colab_base.columns]
+def _collect_ohe_categories(df, cols):
+    cats = []
+    for c in cols:
+        vals = sorted(pd.Series(df[c], dtype="object").dropna().astype(str).unique().tolist())
+        cats.append(vals)
+    return cats
+ohe_categories = _collect_ohe_categories(X_colab_base, categorical_features)
+
 preprocessor = ColumnTransformer(
-    transformers=[('cat', OneHotEncoder(drop='first', handle_unknown='ignore'), categorical_features)],
+    transformers=[
+        ('cat', OneHotEncoder(categories=ohe_categories, handle_unknown='ignore', drop='first'), categorical_features)
+    ],
     remainder='passthrough'
 )
 
@@ -943,7 +957,7 @@ with tabs[6]:
         # ---- 실행 ----
     if st.button("GridSearch 실행"):
         # ✅ 재현성 고정: KFold with shuffle + seed
-        cv_obj = KFold(n_splits=int(cv), shuffle=True, random_state=(SEED if cv_shuffle else None))
+        cv_obj = KFold(n_splits=int(cv), shuffle=True, random_state=SEED)
     
         gs = GridSearchCV(
             estimator=pipe,

@@ -1,4 +1,11 @@
 # app.py
+# ---- dependency guard (optional) ----
+import importlib.util, streamlit as st
+_missing = [m for m in ("numpy","scipy","sklearn","joblib","threadpoolctl","xgboost") if importlib.util.find_spec(m) is None]
+if _missing:
+    st.error(f"필수 라이브러리 미설치: {_missing}. requirements.txt / runtime.txt 버전을 고정해 재배포하세요.")
+    st.stop()
+
 import os
 import ast
 import random

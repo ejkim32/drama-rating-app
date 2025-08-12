@@ -272,7 +272,7 @@ with st.sidebar:
     st.caption("노트북 재현 모드: test_size=0.2, random_state=42")
 
 # ===== 탭 구성 =====
-tabs = st.tabs(["🗂개요","📊기초통계","📈분포/교차","💬워드클라우드","⚙️필터","🔍전체보기","🔧튜닝","🤖ML모델","🎯예측"])
+tabs = st.tabs(["🗂개요","📊기초통계","📈분포/교차","⚙️필터","🔍전체보기","🔧튜닝","🤖ML모델","🎯예측"])
 
 # --- 4.1 데이터 개요 ---
 with tabs[0]:
@@ -715,43 +715,8 @@ with tabs[2]:
     plt.tight_layout()
     st.pyplot(fig, use_container_width=False)
 
-# --- 4.4 워드클라우드 ---
-from wordcloud import WordCloud
-with tabs[3]:
-    st.header("워드클라우드")
-    from collections import Counter
-
-    def top_pairs(words, n=5, keyfn=lambda x: str(x).strip().lower()):
-        vals = [keyfn(w) for w in words if pd.notna(w) and str(w).strip() != ""]
-        return Counter(vals).most_common(n)
-
-    def pairs_to_str(pairs, label_map=None):
-        it = []
-        for k, v in pairs:
-            kk = label_map.get(k, k) if label_map else k
-            it.append(f"{kk}({v:,})")
-        return ", ".join(it) if it else "N/A"
-
-    font_path = st.session_state.get("kfont_path")
-
-    if genre_list:
-        wc = WordCloud(width=800, height=400, background_color='white', font_path=font_path)\
-                .generate(' '.join(genre_list))
-        fig, ax = plt.subplots(); ax.imshow(wc, interpolation='bilinear'); ax.axis('off'); st.pyplot(fig)
-
-    if broadcaster_list:
-        wc = WordCloud(width=800, height=400, background_color='white', font_path=font_path)\
-                .generate(' '.join(broadcaster_list))
-        fig, ax = plt.subplots(); ax.imshow(wc, interpolation='bilinear'); ax.axis('off'); st.pyplot(fig)
-
-    if week_list:
-        wk = [str(w).strip().lower() for w in week_list if pd.notna(w)]
-        wc = WordCloud(width=800, height=400, background_color='white', font_path=font_path)\
-                .generate(' '.join(wk))
-        fig, ax = plt.subplots(); ax.imshow(wc, interpolation='bilinear'); ax.axis('off'); st.pyplot(fig)
-
 # --- 4.5 실시간 필터 ---
-with tabs[4]:
+with tabs[3]:
     st.header("실시간 필터")
     smin,smax = float(pd.to_numeric(raw_df['score'], errors='coerce').min()), float(pd.to_numeric(raw_df['score'], errors='coerce').max())
     sfilter = st.slider("최소 평점", smin,smax,smin)
@@ -762,7 +727,7 @@ with tabs[4]:
     st.dataframe(filt.head(20))
 
 # --- 4.6 전체 미리보기 ---
-with tabs[5]:
+with tabs[4]:
     st.header("원본 전체보기")
     st.dataframe(raw_df, use_container_width=True)
 
@@ -801,7 +766,7 @@ def make_pipeline(model_name, kind, estimator):
     ])
 
 # --- 4.7 GridSearch 튜닝 ---
-with tabs[6]:
+with tabs[5]:
     st.header("GridSearchCV 튜닝")
 
     # split 보장 (노트북과 동일: test_size=0.2, random_state=42, shuffle=True)
@@ -950,7 +915,7 @@ with tabs[6]:
         st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
 
 # --- 4.8 머신러닝 모델링 ---
-with tabs[7]:
+with tabs[6]:
     st.header("머신러닝 모델링")
 
     if "split_colab" not in st.session_state or st.session_state.get("split_key") != float(test_size):

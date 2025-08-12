@@ -101,33 +101,45 @@ def _inject_sparrow_css():
       .top-right{display:flex; gap:8px; align-items:center;}
       .chip{background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:6px 10px; font-size:12px;}
 
+     # ... 기존 CSS 함수 안에서 Sidebar 관련 부분만 아래로 교체 ...
       /* ---------- Sidebar ---------- */
       section[data-testid="stSidebar"]{
         width:220px !important; min-width:220px;
-        background:#111827; color:#e5e7eb; border-right:1px solid #0b1220;
+        background:#0b1220; color:#e5e7eb; border-right:1px solid #070c16;
       }
       .sb-wrap{display:flex; flex-direction:column; height:100%;}
-      .sb-brand{display:flex; align-items:center; gap:10px; padding:14px 12px 6px;}
+      .sb-brand{display:flex; align-items:center; gap:10px; padding:14px 12px 10px;}
       .sb-brand .logo{font-size:20px}
       .sb-brand .name{font-size:16px; font-weight:800; letter-spacing:.2px}
 
-      .sb-menu{padding:8px 10px 6px; display:flex; flex-direction:column; gap:8px;}
-
+      .sb-menu{padding:6px 8px 8px; display:flex; flex-direction:column;}
+      .sb-nav{margin:2px 0;}             /* 버튼 간격 최소화 */
       .sb-nav .stButton>button{
-        width:100%; justify-content:flex-start; gap:10px;
-        background:transparent; color:#e5e7eb; border:1px solid #1f2937;
-        border-radius:10px; padding:8px 10px; font-size:14px;
+        width:100% !important;
+        display:flex; align-items:center; gap:10px; justify-content:flex-start;
+        background:transparent !important;
+        color:#e5e7eb !important;
+        border:1px solid #162033 !important;
+        border-radius:10px !important;
+        padding:8px 10px !important;
+        font-size:14px !important;
+        box-shadow:none !important;
+        opacity:1 !important;            /* 희미해 보이는 문제 방지 */
       }
-      .sb-nav + .sb-nav{ margin-top:8px; }
+      .sb-nav .stButton>button:hover{
+        background:#111a2b !important;
+        border-color:#25324a !important;
+      }
       .sb-nav.active .stButton>button{
-        background:#2563eb; border-color:#2563eb; color:#fff;
+        background:#2563eb !important;
+        border-color:#2563eb !important;
+        color:#ffffff !important;
       }
 
-      .sb-card{background:#0f172a; border:1px solid #1f2937; border-radius:12px; padding:10px;}
+      .sb-card{background:#0f172a; border:1px solid #1f2937; border-radius:12px; padding:10px; margin-top:8px;}
       .sb-card h4{margin:0 0 6px 0; font-size:12px; color:#cbd5e1; font-weight:800;}
-      .sb-caption{font-size:11px; color:#9ca3af; margin-top:6px;}
-      .sb-footer{margin-top:auto; padding:10px 12px; font-size:11px; color:#9ca3af; border-top:1px solid #0b1220;}
-      .sb-footer .ver{opacity:.6}
+      .sb-footer{margin-top:auto; padding:10px 12px; font-size:11px; color:#9ca3af; border-top:1px solid #070c16;}
+
 
       /* ---------- Cards ---------- */
       .kpi-row{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:8px 0 6px;}
@@ -696,13 +708,13 @@ with st.sidebar:
     # Navigation
     st.markdown('<div class="sb-menu">', unsafe_allow_html=True)
     for slug, icon, label, _fn in NAV_ITEMS:
-        active = (slug == current)
-        st.markdown(f'<div class="sb-nav {"active" if active else ""}">', unsafe_allow_html=True)
-        if st.button(f"{icon}  {label}", key=f"nav_{slug}"):
-            st.session_state["nav"] = slug
-            _set_nav_query(slug)
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+    active = (slug == current)
+    st.markdown(f'<div class="sb-nav {"active" if active else ""}">', unsafe_allow_html=True)
+    if st.button(f"{icon}  {label}", key=f"nav_{slug}", use_container_width=True):
+        st.session_state["nav"] = slug
+        _set_nav_query(slug)
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
     # Card: model config
     st.markdown('<div class="sb-card"><h4>모델 설정</h4>', unsafe_allow_html=True)
     test_size = 0.2

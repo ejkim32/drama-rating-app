@@ -767,7 +767,9 @@ with tabs[6]:
 
         cvres = pd.DataFrame(gs.cv_results_)
         cols = ["rank_test_score","mean_test_score","std_test_score","mean_train_score","std_train_score","params"]
-        st.dataframe(cvres[cols].sort_values("rank_test_score").reset_index(drop_by=True))
+        safe_cols = [c for c in ["rank_test_score","mean_test_score","std_test_score","mean_train_score","std_train_score","params"] if c in cvres.columns]
+        sorted_cvres = cvres.loc[:, safe_cols].sort_values("rank_test_score").reset_index(drop=True)
+        st.dataframe(sorted_cvres)
 
     if model_name == "XGBRegressor" and not XGB_AVAILABLE:
         st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")

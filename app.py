@@ -142,7 +142,7 @@ unique_genres = sorted(set(genre_list))
 # ===== 사이드बार =====
 with st.sidebar:
     st.header("🤖 모델 설정")
-    test_size = st.slider('테스트셋 비율', 0.1, 0.2, 0.3, 0.05)
+    test_size = st.slider('테스트셋 비율', 0.1, 0.5, 0.2, 0.05)
     feature_cols = st.multiselect(
         '특성 선택(예측 탭용)',
         ['age','start airing','gender','genres','배우명','network','married'],
@@ -787,29 +787,46 @@ with tabs[6]:
         ))
 
     # ---- 파이프라인 빌더 ----
-    def make_pipeline(kind, estimator):
+    def make_pipeline(kind, estimator, model_name=None):
         if kind == "tree":
             return Pipeline([('preprocessor', preprocessor), ('model', estimator)])
-        else:
+    
+        # ✅ SVR은 다항특성 제거 + 스케일만
+        if model_name == "SVR":
             return Pipeline([
                 ('preprocessor', preprocessor),
-                ('poly', PolynomialFeatures(include_bias=False)),
-                ('scaler', StandardScaler(with_mean=False)),
+                ('scaler', StandardScaler()),   # Dense 전처리 가정
                 ('model', estimator)
             ])
-
+    
+        # ✅ 그 외 비트리: Poly + Scale
+        return Pipeline([
+            ('preprocessor', preprocessor),
+            ('poly', PolynomialFeatures(include_bias=False)),
+            ('scaler', StandardScaler()),
+            ('model', estimator)
+        ])
     # ---- 기본 그리드(디폴트 셋) ----
     default_param_grids = {
-        "KNN": {"poly__degree":[1,2,3], "model__n_neighbors":[3,4,5,6,7,8,9,10]},
-        "Linear Regression (Poly)": {"poly__degree":[1,2,3]},
-        "Ridge": {"poly__degree":[1,2,3], "model__alpha":[0.001,0.01,0.1,1,10,100,1000]},
-        "Lasso": {"poly__degree":[1,2,3], "model__alpha":[0.001,0.01,0.1,1,10,100,1000]},
-        "ElasticNet": {"poly__degree":[1,2,3], "model__alpha":[0.001,0.01,0.1,1,10,100,1000], "model__l1_ratio":[0.1,0.5,0.9]},
-        "SGDRegressor": {"poly__degree":[1,2,3], "model__learning_rate":["constant","invscaling","adaptive"]},
-        "SVR": {"poly__degree":[1,2,3], "model__kernel":["poly","rbf","sigmoid"], "model__degree":[1,2,3]},
-        "Decision Tree": {"model__max_depth":[10,15,20,25,30], "model__min_samples_split":[5,6,7,8,9,10], "model__min_samples_leaf":[2,3,4,5], "model__max_leaf_nodes":[None,10,20,30]},
-        "Random Forest": {"model__n_estimators":[100,200,300], "model__min_samples_split":[5,6,7,8,9,10], "model__max_depth":[5,10,15,20,25,30]},
+    "KNN": {"poly__degree":[1,2,3], "model__n_neighbors":[3,4,5,6,7,8,9,10]},
+    "Linear Regression (Poly)": {"poly__degree":[1,2,3]},
+    "Ridge": {"poly__degree":[1,2,3], "model__alpha":[0.001,0.01,0.1,1,10,100,1000]},
+    "Lasso": {"poly__degree":[1,2,3], "model__alpha":[0.001,0.01,0.1,1,10,100,1000]},
+    "ElasticNet": {"poly__degree":[1,2,3], "model__alpha":[0.001,0.01,0.1,1,10,100,1000], "model__l1_ratio":[0.1,0.5,0.9]},
+    "SGDRegressor": {"poly__degree":[1,2,3], "model__learning_rate":["constant","invscaling","adaptive"]},
+
+    # ✅ 변경: poly__degree 삭제, C/gamma 추가
+    "SVR": {
+        "model__kernel": ["rbf","sigmoid","poly"],
+        "model__C": [0.1, 1, 10],
+        "model__gamma": ["scale", "auto"],
+        "model__degree": [2, 3]  # kernel='poly'일 때만 의미
+    },
+
+    "Decision Tree": {"model__max_depth":[10,15,20,25,30], "model__min_samples_split":[5,6,7,8,9,10], "model__min_samples_leaf":[2,3,4,5], "model__max_leaf_nodes":[None,10,20,30]},
+    "Random Forest": {"model__n_estimators":[100,200,300], "model__min_samples_split":[5,6,7,8,9,10], "model__max_depth":[5,10,15,20,25,30]},
     }
+
     if "XGBRegressor" in model_zoo:
         default_param_grids["XGBRegressor"] = {
             "model__n_estimators":[200,400],
@@ -822,7 +839,7 @@ with tabs[6]:
     # ---- 모델 선택 ----
     model_name = st.selectbox("튜닝할 모델 선택", list(model_zoo.keys()), index=0)
     kind, estimator = model_zoo[model_name]
-    pipe = make_pipeline(kind, estimator)
+    pipe = make_pipeline(kind, estimator, model_name=model_name)
 
     # ---- 동적 파라미터 UI (기본 → 사용자 선택) ----
     st.markdown("**하이퍼파라미터 선택**")

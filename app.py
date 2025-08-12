@@ -239,7 +239,7 @@ if 'start airing' in df_mlb.columns:
     df_mlb['start airing'] = pd.to_numeric(df_mlb['start airing'], errors='coerce')
 
 # ===== Colab 스타일 X/y, 전처리 정의 =====
-drop_cols = [c for c in ['배우명','드라마명','genres','day','network','score'] if c in df_mlb.columns]  # start airing 포함
+drop_cols = [c for c in ['배우명','드라마명','genres','day','network','score','start airing'] if c in df_mlb.columns]  # start airing 포함
 X_colab_base = df_mlb.drop(columns=drop_cols, errors='ignore')
 y_all = df_mlb['score']
 

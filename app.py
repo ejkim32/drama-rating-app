@@ -453,7 +453,7 @@ def page_overview():
     # --- KPI 4장 ---
     st.markdown('<div class="chem-row">', unsafe_allow_html=True)
     with st.container():
-        col1, col2, col3, col4 = st.columns([3,3,3,3], gap="small")
+        col1, col2, col3, col4 = st.columns([2,2,2,2], gap="small")
         with col1: kpi_card("TOTAL TRAFFIC", f"{raw_df.shape[0]:,}", "+5.4% since last month", True)
         with col2: kpi_card("NEW USERS", "3,006", "-4.5% since last month", False)
         # 평균 score (소수 2)

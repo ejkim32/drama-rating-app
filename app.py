@@ -1,5 +1,5 @@
 # =========================================
-# app.py  —  K-드라마 케미스코어 (Sparrow UI 스킨)
+# app.py  —  K-드라마 케미스코어 (Sparrow UI 스킨 + 사이드 네비)
 # =========================================
 
 # ---- page config MUST be first ----
@@ -67,7 +67,8 @@ def ensure_korean_font():
     ]
     if platform.system() == "Windows":
         candidates += [Path(r"C:\Windows\Fonts\malgun.ttf"), Path(r"C:\Windows\Fonts\malgunbd.ttf")]
-    wanted = ("nanum","malgun","applegothic","notosanscjk","sourcehan","gulim","dotum","batang","pretendard","gowun","spoqa")
+    wanted = ("nanum","malgun","applegothic","notosanscjk","sourcehan","gulim","dotum","batang",
+              "pretendard","gowun","spoqa")
     for f in fm.findSystemFonts(fontext="ttf"):
         if any(k in os.path.basename(f).lower() for k in wanted):
             candidates.append(Path(f))
@@ -109,7 +110,19 @@ def _inject_sparrow_css():
       .sb-brand{display:flex; align-items:center; gap:10px; padding:14px 12px 6px;}
       .sb-brand .logo{font-size:20px}
       .sb-brand .name{font-size:16px; font-weight:800; letter-spacing:.2px}
+
       .sb-menu{padding:8px 10px 6px; display:flex; flex-direction:column; gap:8px;}
+
+      .sb-nav .stButton>button{
+        width:100%; justify-content:flex-start; gap:10px;
+        background:transparent; color:#e5e7eb; border:1px solid #1f2937;
+        border-radius:10px; padding:8px 10px; font-size:14px;
+      }
+      .sb-nav + .sb-nav{ margin-top:8px; }
+      .sb-nav.active .stButton>button{
+        background:#2563eb; border-color:#2563eb; color:#fff;
+      }
+
       .sb-card{background:#0f172a; border:1px solid #1f2937; border-radius:12px; padding:10px;}
       .sb-card h4{margin:0 0 6px 0; font-size:12px; color:#cbd5e1; font-weight:800;}
       .sb-caption{font-size:11px; color:#9ca3af; margin-top:6px;}
@@ -217,8 +230,10 @@ except TypeError:
     ohe = OneHotEncoder(drop='first', handle_unknown='ignore', sparse=False)
 
 preprocessor = ColumnTransformer(
-    transformers=[('cat', Pipeline(steps=[('imputer', SimpleImputer(strategy='constant', fill_value='(missing)')),
-                                         ('ohe', ohe)]), categorical_features)],
+    transformers=[('cat',
+                   Pipeline(steps=[('imputer', SimpleImputer(strategy='constant', fill_value='(missing)')),
+                                   ('ohe', ohe)]),
+                   categorical_features)],
     remainder='passthrough'
 )
 
@@ -259,23 +274,26 @@ def age_to_age_group(age: int) -> str:
         return counts[candidates].idxmax()
     return counts.idxmax()
 
-# ====== Sidebar (Sparrow style) ======
-with st.sidebar:
-    st.markdown('<div class="sb-wrap">', unsafe_allow_html=True)
+# =============================
+# 네비게이션 정의 & 쿼리파람 동기화
+# =============================
+# 페이지 함수들은 아래에서 정의됩니다.
+def _get_nav_from_query():
+    if hasattr(st, "query_params"):  # Streamlit 1.30+
+        val = st.query_params.get("nav", None)
+        return val[0] if isinstance(val, list) else val
+    else:
+        qp = st.experimental_get_query_params()
+        val = qp.get("nav", [None])
+        return val[0]
 
-    st.markdown('<div class="sb-brand"><span class="logo">🎬</span><span class="name">케미스코어</span></div>', unsafe_allow_html=True)
+def _set_nav_query(slug: str):
+    if hasattr(st, "query_params"):
+        st.query_params["nav"] = slug
+    else:
+        st.experimental_set_query_params(nav=slug)
 
-    st.markdown('<div class="sb-menu">', unsafe_allow_html=True)
-    st.markdown('<div class="sb-card"><h4>모델 설정</h4>', unsafe_allow_html=True)
-    test_size = 0.2
-    st.caption("노트북 재현 모드: test_size=0.2, random_state=42")
-    st.markdown('</div>', unsafe_allow_html=True)  # /sb-card
-    st.markdown('</div>', unsafe_allow_html=True)  # /sb-menu
-
-    st.markdown('<div class="sb-footer">© Chemiscore • <span class="ver">v0.1</span></div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)  # /sb-wrap
-
-# ====== Topbar ======
+# ---------- Topbar ----------
 st.markdown("""
 <div class="topbar">
   <div>
@@ -289,24 +307,21 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ====== Tabs ======
-tabs = st.tabs(["🗂 개요","📊 기초통계","📈 분포/교차","⚙️ 필터","🔍 전체보기","🔧 튜닝","🤖 ML모델","🎯 예측"])
-
-# ---------- 개요 ----------
-with tabs[0]:
-    # KPIs (샘플)
+# ---------- 각 페이지 ----------
+def page_overview():
     total_titles = int(raw_df['드라마명'].nunique()) if '드라마명' in raw_df.columns else int(raw_df.shape[0])
-    total_actors = int(raw_df['배우명'].nunique()) if '배우명' in raw_df.columns else int(raw_df['actor'].nunique()) if 'actor' in raw_df.columns else int(raw_df.shape[0])
+    total_actors = int(raw_df['배우명'].nunique()) if '배우명' in raw_df.columns else \
+                   (int(raw_df['actor'].nunique()) if 'actor' in raw_df.columns else int(raw_df.shape[0]))
     avg_score = float(pd.to_numeric(raw_df['score'], errors='coerce').mean())
 
-    st.markdown("""
+    st.markdown(f"""
     <div class="kpi-row">
-      <div class="kpi"><h6>TOTAL TITLES</h6><div class="v">{}</div><div class="d">전체 작품</div></div>
-      <div class="kpi"><h6>TOTAL ACTORS</h6><div class="v">{}</div><div class="d">명</div></div>
-      <div class="kpi"><h6>AVG CHEMI SCORE</h6><div class="v">{:.2f}</div><div class="d">전체 평균</div></div>
-      <div class="kpi"><h6>GENRES</h6><div class="v">{}</div><div class="d">유니크</div></div>
+      <div class="kpi"><h6>TOTAL TITLES</h6><div class="v">{total_titles}</div><div class="d">전체 작품</div></div>
+      <div class="kpi"><h6>TOTAL ACTORS</h6><div class="v">{total_actors}</div><div class="d">명</div></div>
+      <div class="kpi"><h6>AVG CHEMI SCORE</h6><div class="v">{0.0 if np.isnan(avg_score) else round(avg_score,2):.2f}</div><div class="d">전체 평균</div></div>
+      <div class="kpi"><h6>GENRES</h6><div class="v">{len(unique_genres)}</div><div class="d">유니크</div></div>
     </div>
-    """.format(total_titles, total_actors, avg_score if not np.isnan(avg_score) else 0.0, len(unique_genres)), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
     st.subheader("연도별 평균 케미스코어")
     df_year = raw_df.copy()
@@ -317,8 +332,7 @@ with tabs[0]:
                   x='start airing', y='score', markers=True)
     st.plotly_chart(fig, use_container_width=True)
 
-# ---------- 기초통계 ----------
-with tabs[1]:
+def page_basic():
     st.header("기초 통계: score")
     st.write(pd.to_numeric(raw_df['score'], errors='coerce').describe())
     fig,ax=plt.subplots(figsize=(6,3))
@@ -326,10 +340,8 @@ with tabs[1]:
     ax.set_title("전체 평점 분포")
     st.pyplot(fig)
 
-# ---------- 분포/교차 ----------
-with tabs[2]:
+def page_dist():
     st.header("분포 및 교차분석")
-
     st.subheader("연도별 주요 플랫폼 작품 수")
     ct = (
         pd.DataFrame({'start airing': raw_df['start airing'], 'network': raw_df['network'].apply(clean_cell_colab)})
@@ -345,15 +357,12 @@ with tabs[2]:
            .fillna(0).astype(int))
     years = sorted(p.index)
     insights = []
-
     if 'NETFLIX' in p.columns:
         s = p['NETFLIX']; nz = s[s > 0]
         if not nz.empty:
             first_year = int(nz.index.min())
             max_year, max_val = int(s.idxmax()), int(s.max())
-            txt = f"- **넷플릭스(OTT)의 급성장**: {first_year}년 이후 증가, **{max_year}년 {max_val}편** 최고치."
-            insights.append(txt)
-
+            insights.append(f"- **넷플릭스(OTT)의 급성장**: {first_year}년 이후 증가, **{max_year}년 {max_val}편** 최고치.")
     down_ter = []
     for b in ['KBS','MBC','SBS']:
         if b in p.columns and len(years) >= 2:
@@ -361,78 +370,76 @@ with tabs[2]:
             if slope < 0: down_ter.append(b)
     if down_ter:
         insights.append(f"- **지상파 감소 추세**: {' / '.join(down_ter)} 전반적 하락.")
-
     st.markdown("**인사이트**\n" + "\n".join(insights))
 
-    # 장르 개수별 배우 평균 평점
     st.subheader("장르 개수별 평균 평점 (배우 단위)")
     actor_col = '배우명' if '배우명' in raw_df.columns else ('actor' if 'actor' in raw_df.columns else None)
     if actor_col is None:
         st.info("배우 식별 컬럼을 찾을 수 없어(배우명/actor) 이 섹션을 건너뜁니다.")
-    else:
-        gdf = (
-            pd.DataFrame({actor_col: raw_df[actor_col], 'genres': raw_df['genres'].apply(clean_cell_colab)})
-            .explode('genres').dropna(subset=[actor_col,'genres'])
-        )
-        genre_cnt = gdf.groupby(actor_col)['genres'].nunique().rename('장르개수')
-        actor_mean = (raw_df.groupby(actor_col, as_index=False)['score']
-                      .mean().rename(columns={'score':'배우평균점수'}))
-        df_actor = actor_mean.merge(genre_cnt.reset_index(), on=actor_col, how='left')
-        df_actor['장르개수'] = df_actor['장르개수'].fillna(0).astype(int)
-        df_actor = df_actor[df_actor['장르개수'] > 0].copy()
+        return
+    gdf = (
+        pd.DataFrame({actor_col: raw_df[actor_col], 'genres': raw_df['genres'].apply(clean_cell_colab)})
+        .explode('genres').dropna(subset=[actor_col,'genres'])
+    )
+    genre_cnt = gdf.groupby(actor_col)['genres'].nunique().rename('장르개수')
+    actor_mean = (raw_df.groupby(actor_col, as_index=False)['score']
+                  .mean().rename(columns={'score':'배우평균점수'}))
+    df_actor = actor_mean.merge(genre_cnt.reset_index(), on=actor_col, how='left')
+    df_actor['장르개수'] = df_actor['장르개수'].fillna(0).astype(int)
+    df_actor = df_actor[df_actor['장르개수'] > 0].copy()
+    def bucket(n: int) -> str:
+        if n <= 2:  return '1~2개'
+        if n <= 4:  return '3~4개'
+        if n <= 6:  return '5~6개'
+        return '7개 이상'
+    df_actor['장르개수구간'] = pd.Categorical(
+        df_actor['장르개수'].apply(bucket),
+        categories=['1~2개','3~4개','5~6개','7개 이상'],
+        ordered=True
+    )
+    fig_box = px.box(
+        df_actor, x='장르개수구간', y='배우평균점수',
+        category_orders={'장르개수구간': ['1~2개','3~4개','5~6개','7개 이상']},
+        title="장르 개수별 배우 평균 점수 분포"
+    )
+    st.plotly_chart(fig_box, use_container_width=True)
 
-        def bucket(n: int) -> str:
-            if n <= 2:  return '1~2개'
-            if n <= 4:  return '3~4개'
-            if n <= 6:  return '5~6개'
-            return '7개 이상'
-
-        df_actor['장르개수구간'] = pd.Categorical(
-            df_actor['장르개수'].apply(bucket),
-            categories=['1~2개','3~4개','5~6개','7개 이상'],
-            ordered=True
-        )
-        fig_box = px.box(
-            df_actor, x='장르개수구간', y='배우평균점수',
-            category_orders={'장르개수구간': ['1~2개','3~4개','5~6개','7개 이상']},
-            title="장르 개수별 배우 평균 점수 분포"
-        )
-        st.plotly_chart(fig_box, use_container_width=True)
-
-# ---------- 실시간 필터 ----------
-with tabs[3]:
+def page_filter():
     st.header("실시간 필터")
-    smin,smax = float(pd.to_numeric(raw_df['score'], errors='coerce').min()), float(pd.to_numeric(raw_df['score'], errors='coerce').max())
-    sfilter = st.slider("최소 평점", smin,smax,smin)
+    smin = float(pd.to_numeric(raw_df['score'], errors='coerce').min())
+    smax = float(pd.to_numeric(raw_df['score'], errors='coerce').max())
+    sfilter = st.slider("최소 평점", smin, smax, smin)
     y_min = int(pd.to_numeric(raw_df['start airing'], errors='coerce').min())
     y_max = int(pd.to_numeric(raw_df['start airing'], errors='coerce').max())
     yfilter = st.slider("방영년도 범위", y_min, y_max, (y_min, y_max))
-    filt = raw_df[(pd.to_numeric(raw_df['score'], errors='coerce')>=sfilter) & pd.to_numeric(raw_df['start airing'], errors='coerce').between(*yfilter)]
+    filt = raw_df[(pd.to_numeric(raw_df['score'], errors='coerce')>=sfilter) &
+                  pd.to_numeric(raw_df['start airing'], errors='coerce').between(*yfilter)]
     st.dataframe(filt.head(20), use_container_width=True)
 
-# ---------- 전체보기 ----------
-with tabs[4]:
+def page_all():
     st.header("원본 전체보기")
     st.dataframe(raw_df, use_container_width=True)
 
-# ---------- 공통 파이프라인 ----------
 def make_pipeline(model_name, kind, estimator):
     if kind == "tree":
         return Pipeline([('preprocessor', preprocessor), ('model', estimator)])
     if model_name == "SVR":
         return Pipeline([('preprocessor', preprocessor), ('scaler', StandardScaler()), ('model', estimator)])
     if model_name == "KNN":
-        return Pipeline([('preprocessor', preprocessor), ('poly', PolynomialFeatures(include_bias=False)), ('scaler', StandardScaler()), ('knn', estimator)])
+        return Pipeline([('preprocessor', preprocessor), ('poly', PolynomialFeatures(include_bias=False)),
+                         ('scaler', StandardScaler()), ('knn', estimator)])
     if model_name == "Linear Regression (Poly)":
-        return Pipeline([('preprocessor', preprocessor), ('poly', PolynomialFeatures(include_bias=False)), ('scaler', StandardScaler()), ('linreg', estimator)])
-    return Pipeline([('preprocessor', preprocessor), ('poly', PolynomialFeatures(include_bias=False)), ('scaler', StandardScaler()), ('model', estimator)])
+        return Pipeline([('preprocessor', preprocessor), ('poly', PolynomialFeatures(include_bias=False)),
+                         ('scaler', StandardScaler()), ('linreg', estimator)])
+    return Pipeline([('preprocessor', preprocessor), ('poly', PolynomialFeatures(include_bias=False)),
+                     ('scaler', StandardScaler()), ('model', estimator)])
 
-# ---------- 튜닝 ----------
-with tabs[5]:
+def page_tuning():
     st.header("GridSearchCV 튜닝")
-
     if "split_colab" not in st.session_state or st.session_state.get("split_key") != float(0.2):
-        X_train, X_test, y_train, y_test = train_test_split(X_colab_base, y_all, test_size=0.2, random_state=SEED, shuffle=True)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_colab_base, y_all, test_size=0.2, random_state=SEED, shuffle=True
+        )
         st.session_state["split_colab"] = (X_train, X_test, y_train, y_test)
         st.session_state["split_key"] = float(0.2)
     X_train, X_test, y_train, y_test = st.session_state["split_colab"]
@@ -463,9 +470,7 @@ with tabs[5]:
                         try: val=float(t)
                         except: val=t
                 chosen.append(val)
-        uniq=[]
-        for v in chosen:
-            if v not in uniq: uniq.append(v)
+        uniq=[];  [uniq.append(v) for v in chosen if v not in uniq]
         return uniq
 
     model_zoo = {
@@ -480,7 +485,9 @@ with tabs[5]:
         "Random Forest": ("tree", RandomForestRegressor(random_state=SEED)),
     }
     if 'XGBRegressor' in globals() and XGB_AVAILABLE:
-        model_zoo["XGBRegressor"] = ("tree", XGBRegressor(random_state=SEED, objective="reg:squarederror", n_jobs=-1, tree_method="hist"))
+        model_zoo["XGBRegressor"] = ("tree", XGBRegressor(
+            random_state=SEED, objective="reg:squarederror", n_jobs=-1, tree_method="hist"
+        ))
 
     default_param_grids = {
         "KNN": {"poly__degree":[1,2,3], "knn__n_neighbors":[3,4,5,6,7,8,9,10]},
@@ -490,8 +497,10 @@ with tabs[5]:
         "ElasticNet": {"poly__degree":[1,2,3], "model__alpha":[0.001,0.01,0.1,1,10,100,1000], "model__l1_ratio":[0.1,0.5,0.9]},
         "SGDRegressor": {"poly__degree":[1,2,3], "model__learning_rate":["constant","invscaling","adaptive"]},
         "SVR": {"model__kernel":["poly","rbf","sigmoid"], "model__degree":[1,2,3]},
-        "Decision Tree": {"model__max_depth":[10,15,20,25,30], "model__min_samples_split":[5,6,7,8,9,10], "model__min_samples_leaf":[2,3,4,5], "model__max_leaf_nodes":[None,10,20,30]},
-        "Random Forest": {"model__n_estimators":[100,200,300], "model__min_samples_split":[5,6,7,8,9,10], "model__max_depth":[5,10,15,20,25,30]},
+        "Decision Tree": {"model__max_depth":[10,15,20,25,30], "model__min_samples_split":[5,6,7,8,9,10],
+                          "model__min_samples_leaf":[2,3,4,5], "model__max_leaf_nodes":[None,10,20,30]},
+        "Random Forest": {"model__n_estimators":[100,200,300], "model__min_samples_split":[5,6,7,8,9,10],
+                          "model__max_depth":[5,10,15,20,25,30]},
     }
     if "XGBRegressor" in model_zoo:
         default_param_grids["XGBRegressor"] = {
@@ -508,17 +517,15 @@ with tabs[5]:
 
     st.markdown("**하이퍼파라미터 선택**")
     base_grid = default_param_grids.get(model_name, {})
-    user_grid = {}
-    for param_key, default_vals in base_grid.items():
-        user_vals = render_param_selector(param_key, default_vals)
-        user_grid[param_key] = user_vals if len(user_vals) > 0 else default_vals
+    user_grid = {k: render_param_selector(k, v) for k, v in base_grid.items()}
 
     with st.expander("선택한 파라미터 확인"):
         st.write(user_grid)
 
     if st.button("GridSearch 실행"):
         cv_obj = KFold(n_splits=int(cv), shuffle=True, random_state=SEED) if cv_shuffle else int(cv)
-        gs = GridSearchCV(estimator=pipe, param_grid=user_grid, cv=cv_obj, scoring=scoring, n_jobs=-1, refit=True, return_train_score=True)
+        gs = GridSearchCV(estimator=pipe, param_grid=user_grid, cv=cv_obj,
+                          scoring=scoring, n_jobs=-1, refit=True, return_train_score=True)
         with st.spinner("GridSearchCV 실행 중..."):
             gs.fit(X_train, y_train)
 
@@ -543,18 +550,20 @@ with tabs[5]:
         st.session_state["best_split_key"] = st.session_state.get("split_key")
 
         cvres = pd.DataFrame(gs.cv_results_)
-        safe_cols = [c for c in ["rank_test_score","mean_test_score","std_test_score","mean_train_score","std_train_score","params"] if c in cvres.columns]
+        safe_cols = [c for c in ["rank_test_score","mean_test_score","std_test_score",
+                                 "mean_train_score","std_train_score","params"] if c in cvres.columns]
         sorted_cvres = cvres.loc[:, safe_cols].sort_values("rank_test_score").reset_index(drop=True)
         st.dataframe(sorted_cvres, use_container_width=True)
 
     if model_name == "XGBRegressor" and not XGB_AVAILABLE:
         st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
 
-# ---------- ML 모델 ----------
-with tabs[6]:
+def page_ml():
     st.header("머신러닝 모델링")
     if "split_colab" not in st.session_state or st.session_state.get("split_key") != float(0.2):
-        X_train, X_test, y_train, y_test = train_test_split(X_colab_base, y_all, test_size=0.2, random_state=SEED, shuffle=True)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_colab_base, y_all, test_size=0.2, random_state=SEED, shuffle=True
+        )
         st.session_state["split_colab"] = (X_train, X_test, y_train, y_test)
         st.session_state["split_key"] = float(0.2)
     X_train, X_test, y_train, y_test = st.session_state["split_colab"]
@@ -580,8 +589,7 @@ with tabs[6]:
         with st.expander("베스트 하이퍼파라미터 보기"):
             st.json(st.session_state["best_params"])
 
-# ---------- 예측 ----------
-with tabs[7]:
+def page_predict():
     st.header("평점 예측")
 
     genre_opts   = sorted({g for sub in raw_df['genres'].dropna().apply(clean_cell_colab) for g in sub})
@@ -621,43 +629,89 @@ with tabs[7]:
         data_age_groups = sorted(set(str(x) for x in raw_df.get("age_group", pd.Series([], dtype=object)).dropna().unique()))
         opts_age_group = data_age_groups if data_age_groups else age_group_candidates
         safe_index = 0 if not opts_age_group else min(1, len(opts_age_group)-1)
-        target_age_group = st.selectbox("🎯 타깃 시청자 연령대", options=opts_age_group if opts_age_group else ["(데이터 없음)"], index=safe_index, key="target_age_group_main")
+        target_age_group = st.selectbox("🎯 타깃 시청자 연령대",
+                                        options=opts_age_group if opts_age_group else ["(데이터 없음)"],
+                                        index=safe_index,
+                                        key="target_age_group_main")
         st.session_state["target_age_group"] = target_age_group
         st.session_state["actor_age"] = int(input_age)
         predict_btn = st.button("예측 실행")
 
-    if predict_btn:
-        if "best_estimator" in st.session_state:
-            model_full = clone(st.session_state["best_estimator"])
-            st.caption(f"예측 모델: GridSearch 베스트 재학습 사용 ({st.session_state.get('best_name')})")
-        else:
-            model_full = Pipeline([('preprocessor', preprocessor), ('model', RandomForestRegressor(n_estimators=100, random_state=SEED))])
-            st.caption("예측 모델: 기본 RandomForest (미튜닝)")
-        model_full.fit(X_colab_base, y_all)
+    if not predict_btn:
+        return
 
-        user_raw = pd.DataFrame([{
-            'age': int(input_age), 'gender': input_gender, 'role': input_role, 'married': input_married,
-            'air_q': input_quarter, 'age_group': derived_age_group,
-            'genres': input_genre, 'day': input_week, 'network': input_plat, '장르구분': genre_bucket,
-        }])
+    if "best_estimator" in st.session_state:
+        model_full = clone(st.session_state["best_estimator"])
+        st.caption(f"예측 모델: GridSearch 베스트 재학습 사용 ({st.session_state.get('best_name')})")
+    else:
+        model_full = Pipeline([('preprocessor', preprocessor),
+                               ('model', RandomForestRegressor(n_estimators=100, random_state=SEED))])
+        st.caption("예측 모델: 기본 RandomForest (미튜닝)")
+    model_full.fit(X_colab_base, y_all)
 
-        def _build_user_base(df_raw: pd.DataFrame) -> pd.DataFrame:
-            _user_mlb = colab_multilabel_transform(df_raw, cols=('genres','day','network'))
-            _base = pd.concat([X_colab_base.iloc[:0].copy(), _user_mlb], ignore_index=True)
-            _base = _base.drop(columns=[c for c in drop_cols if c in _base.columns], errors='ignore')
-            for c in X_colab_base.columns:
-                if c not in _base.columns:
-                    _base[c] = 0
-            _base = _base[X_colab_base.columns].tail(1)
-            num_cols_ = X_colab_base.select_dtypes(include=[np.number]).columns.tolist()
-            if len(num_cols_) > 0:
-                _base[num_cols_] = _base[num_cols_].apply(pd.to_numeric, errors="coerce")
-                _base[num_cols_] = _base[num_cols_].replace([np.inf, -np.inf], np.nan).fillna(0.0)
-            return _base
+    user_raw = pd.DataFrame([{
+        'age': int(input_age), 'gender': input_gender, 'role': input_role, 'married': input_married,
+        'air_q': input_quarter, 'age_group': derived_age_group,
+        'genres': input_genre, 'day': input_week, 'network': input_plat, '장르구분': genre_bucket,
+    }])
 
-        user_base = _build_user_base(user_raw)
-        pred = float(model_full.predict(user_base)[0])
-        st.success(f"💡 예상 평점: {pred:.2f}")
-        st.session_state["cf_user_raw"] = user_raw.copy()
-        st.session_state["cf_pred"] = float(pred)
-        st.session_state["cf_model"] = model_full
+    def _build_user_base(df_raw: pd.DataFrame) -> pd.DataFrame:
+        _user_mlb = colab_multilabel_transform(df_raw, cols=('genres','day','network'))
+        _base = pd.concat([X_colab_base.iloc[:0].copy(), _user_mlb], ignore_index=True)
+        _base = _base.drop(columns=[c for c in drop_cols if c in _base.columns], errors='ignore')
+        for c in X_colab_base.columns:
+            if c not in _base.columns:
+                _base[c] = 0
+        _base = _base[X_colab_base.columns].tail(1)
+        num_cols_ = X_colab_base.select_dtypes(include=[np.number]).columns.tolist()
+        if len(num_cols_) > 0:
+            _base[num_cols_] = _base[num_cols_].apply(pd.to_numeric, errors="coerce")
+            _base[num_cols_] = _base[num_cols_].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        return _base
+
+    user_base = _build_user_base(user_raw)
+    pred = float(model_full.predict(user_base)[0])
+    st.success(f"💡 예상 평점: {pred:.2f}")
+
+# ================== 사이드바 (네비 + 설정) ==================
+NAV_ITEMS = [
+    ("overview", "🏠", "개요",        page_overview),
+    ("basic",    "📋", "기초통계",    page_basic),
+    ("dist",     "📈", "분포/교차",   page_dist),
+    ("filter",   "🛠️", "필터",        page_filter),
+    ("all",      "🗂️", "전체보기",    page_all),
+    ("tuning",   "🧪", "튜닝",        page_tuning),
+    ("ml",       "🤖", "ML모델",      page_ml),
+    ("predict",  "🎯", "예측",        page_predict),
+]
+
+if "nav" not in st.session_state:
+    st.session_state["nav"] = _get_nav_from_query() or "overview"
+current = st.session_state["nav"]
+
+with st.sidebar:
+    st.markdown('<div class="sb-wrap">', unsafe_allow_html=True)
+    st.markdown('<div class="sb-brand"><span class="logo">🎬</span><span class="name">케미스코어</span></div>', unsafe_allow_html=True)
+
+    # Navigation
+    st.markdown('<div class="sb-menu">', unsafe_allow_html=True)
+    for slug, icon, label, _fn in NAV_ITEMS:
+        active = (slug == current)
+        st.markdown(f'<div class="sb-nav {"active" if active else ""}">', unsafe_allow_html=True)
+        if st.button(f"{icon}  {label}", key=f"nav_{slug}"):
+            st.session_state["nav"] = slug
+            _set_nav_query(slug)
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    # Card: model config
+    st.markdown('<div class="sb-card"><h4>모델 설정</h4>', unsafe_allow_html=True)
+    test_size = 0.2
+    st.caption("노트북 재현 모드: test_size=0.2, random_state=42")
+    st.markdown('</div>', unsafe_allow_html=True)  # /sb-card
+    st.markdown('</div>', unsafe_allow_html=True)  # /sb-menu
+    st.markdown('<div class="sb-footer">© Chemiscore • <span class="ver">v0.1</span></div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)  # /sb-wrap
+
+# ================== 라우팅 ==================
+PAGES = {slug: fn for slug, _, _, fn in NAV_ITEMS}
+PAGES.get(st.session_state["nav"], page_overview)()

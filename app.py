@@ -825,7 +825,7 @@ with tabs[8]:
         # 🔎 Counterfactual What-if  (FINAL)
         # =========================
         st.markdown("---")
-        st.subheader("🧪 What-if(카운터팩추얼) 탐색")
+        st.subheader("2) 케미스코어 솔루션")
         
         # 0) 먼저 예측을 실행했는지 확인 (predict 버튼에서 세션 저장 필수)
         _cf_raw   = st.session_state.get("cf_user_raw")

@@ -38,6 +38,34 @@ except Exception:
 def rmse(y_true, y_pred):
     return float(np.sqrt(mean_squared_error(y_true, y_pred)))
 
+# ===== Dashboard CSS (once) =====
+def ensure_dashboard_css():
+    if st.session_state.get("_chem_css_injected"):
+        return
+    st.session_state["_chem_css_injected"] = True
+    st.markdown("""
+    <style>
+      .chem-kpi-card{
+        background:#fff;border:1px solid #EEF2F7;border-radius:16px;
+        box-shadow:0 4px 16px rgba(17,24,39,.04);padding:14px 16px 10px 16px;
+      }
+      .chem-kpi-title{font-size:12px;color:#6b7280;font-weight:700;margin-bottom:6px}
+      .chem-kpi-main{display:flex;align-items:baseline;gap:8px}
+      .chem-kpi-val{font-size:28px;font-weight:800;line-height:1}
+      .chem-kpi-sub{font-size:12px;color:#10b981;font-weight:700}
+
+      .chem-card{
+        background:#fff;border:1px solid #EEF2F7;border-radius:16px;
+        box-shadow:0 4px 16px rgba(17,24,39,.04);padding:16px 16px 12px 16px;
+      }
+      .chem-card h4{margin:0 0 6px 0;font-size:14px;color:#6b7280;font-weight:700}
+
+      .chem-row{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+      .col-3{grid-column:span 3}.col-4{grid-column:span 4}
+      .col-6{grid-column:span 6}.col-12{grid-column:span 12}
+    </style>
+    """, unsafe_allow_html=True)
+
 # ===== 전역 시드 고정 =====
 SEED = 42
 os.environ["PYTHONHASHSEED"] = str(SEED)
@@ -490,7 +518,7 @@ with st.sidebar:
 # 페이지 함수들
 # ==============================
 def page_overview():
-    _inject_dashboard_css()
+    ensure_dashboard_css() 
 
     # ----- 집계에 쓸 컬럼 안전 준비 -----
     drama_col = '드라마명' if _exists('드라마명') else None

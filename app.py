@@ -86,14 +86,25 @@ _ = ensure_korean_font()
 def _inject_global_css():
     st.markdown("""
     <style>
-      /* 전체 톤 */
-      .block-container{padding-top:1.2rem; padding-bottom:2rem;}
-      h1,h2,h3,h4{font-weight:800;}
-      /* 상단 바 */
+      /* 전체 패딩을 조금 더 주어 h1이 안 잘리게 */
+      .block-container{padding-top:2.2rem; padding-bottom:2rem; overflow:visible;}
+
+      /* 제목(h1) 크기/라인 높이 조정 */
+      h1{
+        font-weight:800;
+        font-size:28px;      /* 필요시 26~30 사이로 조절 */
+        line-height:1.2;
+        margin:0 0 .5rem 0;  /* 아래 여백만 */
+        overflow:visible;
+      }
+      h2,h3,h4{font-weight:800;}
+
+      /* 상단 바: 타이틀과 겹치지 않게 살짝 아래로 내림 */
       .chem-topbar{
         position:sticky; top:0; z-index:9;
         background:#f7fafc; border-bottom:1px solid #EAECF0;
-        padding:10px 14px; margin:0 -1rem 1rem -1rem;
+        padding:10px 14px;
+        margin:.25rem -1rem 1rem -1rem; /* ← 상단 여백 + 가로 풀블리드 유지 */
       }
       .chem-toprow{display:flex; align-items:center; gap:12px; justify-content:space-between;}
       .chem-brand{display:flex; align-items:center; gap:8px; font-weight:800; font-size:18px;}
@@ -108,6 +119,7 @@ def _inject_global_css():
         background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;
       }
       .chem-iconbtn:hover{box-shadow:0 4px 12px rgba(0,0,0,.06); transform:translateY(-1px);}
+
       /* 카드 */
       .chem-card{
         background:#ffffff; border:1px solid #EEF2F7; border-radius:16px;
@@ -120,8 +132,14 @@ def _inject_global_css():
       .chem-row{display:grid; grid-template-columns:repeat(12,1fr); gap:14px;}
       .col-3{grid-column:span 3;} .col-4{grid-column:span 4;} .col-5{grid-column:span 5;}
       .col-6{grid-column:span 6;} .col-7{grid-column:span 7;} .col-12{grid-column:span 12;}
-      /* Plotly/Matplotlib 카드 여백 */
       div[data-testid="stPlotlyChart"], div.stPlot {margin-top:8px;}
+
+      /* 작은 화면에서 추가 안전장치 */
+      @media (max-width: 900px){
+        .block-container{padding-top:1.4rem;}
+        h1{font-size:22px;}
+        .chem-topbar{position:static; margin:.4rem -1rem .6rem;}
+      }
     </style>
     """, unsafe_allow_html=True)
 

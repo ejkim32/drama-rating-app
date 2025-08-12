@@ -153,6 +153,15 @@ def _inject_sparrow_css():
 
       /* Plot containers tighter top margin */
       div[data-testid="stPlotlyChart"], div.stPlot {margin-top:8px;}
+
+      /* 메인 컨테이너 상단 여백 살짝 키워서 카드 잘림 방지 */
+      .block-container{padding-top:1.4rem; padding-bottom:2.2rem;}
+    
+      /* KPI 줄과 다음 섹션 간 간격 */
+      .kpi-row{ margin-bottom: 18px; }
+    
+      /* Plotly 차트 바깥쪽 여백 줄이기 + 기본 높이 */
+      div[data-testid="stPlotlyChart"]{ margin-top:8px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -332,6 +341,57 @@ def page_overview():
                   x='start airing', y='score', markers=True)
     st.plotly_chart(fig, use_container_width=True)
 
+    c1, c2 = st.columns([1, 1])
+    with c1:
+    st.subheader("최근 연도 상위 작품 (중복 제거)")
+    _df = raw_df.copy()
+    _df['start airing'] = pd.to_numeric(_df['start airing'], errors='coerce')
+    _df['score'] = pd.to_numeric(_df['score'], errors='coerce')
+    _df = _df.dropna(subset=['start airing', 'score'])
+
+    if not _df.empty:
+        last_year = int(_df['start airing'].max())
+        # 최근 1년 또는 2년 범위 (원하면 범위 조정 가능)
+        recent = _df[_df['start airing'].between(last_year-1, last_year)]
+
+        name_col = '드라마명' if '드라마명' in recent.columns else (
+            'title' if 'title' in recent.columns else recent.columns[0]
+        )
+
+        # 드라마명 기준 중복 제거 (가장 높은 점수만 남김)
+        recent_unique = (
+            recent.sort_values('score', ascending=False)
+                  .drop_duplicates(subset=[name_col], keep='first')
+        )
+
+        top_recent = recent_unique.sort_values('score', ascending=False).head(10)
+        fig_recent = px.bar(top_recent, x=name_col, y='score', text='score')
+        fig_recent.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+        fig_recent.update_layout(height=320, margin=dict(l=10, r=10, t=20, b=40))
+        st.plotly_chart(fig_recent, use_container_width=True)
+    else:
+        st.info("최근 연도 데이터가 없습니다.")
+
+    # (오른쪽) 플랫폼별 작품 수 TOP 10
+    with c2:
+        st.subheader("플랫폼별 작품 수 (TOP 10)")
+        _p = raw_df.copy()
+        _p['network'] = _p['network'].apply(clean_cell_colab)
+        _p = _p.explode('network').dropna(subset=['network'])
+        p_cnt = (
+            _p['network'].value_counts().head(10).reset_index()
+              .rename(columns={'index':'network', 'network':'count'})
+        )
+        fig_p = px.bar(p_cnt, x='network', y='count')
+        fig_p.update_layout(height=320, margin=dict(l=10, r=10, t=20, b=40))
+        st.plotly_chart(fig_p, use_container_width=True)
+
+        fig = px.line(
+        df_year.groupby('start airing')['score'].mean().reset_index(),
+        x='start airing', y='score', markers=True)
+        fig.update_layout(height=380, margin=dict(l=10, r=10, t=20, b=40))
+        st.plotly_chart(fig, use_container_width=True)
+
 def page_basic():
     st.header("기초 통계: score")
     st.write(pd.to_numeric(raw_df['score'], errors='coerce').describe())
@@ -339,6 +399,7 @@ def page_basic():
     ax.hist(pd.to_numeric(raw_df['score'], errors='coerce'), bins=20)
     ax.set_title("전체 평점 분포")
     st.pyplot(fig)
+
 
 def page_dist():
     st.header("분포 및 교차분석")

@@ -91,7 +91,7 @@ def _inject_global_css():
 
       /* 제목(h1) 크기/라인 높이 조정 */
       h1{
-        font-weight:800;
+        font-weight:700;
         font-size:26px;      /* 필요시 26~30 사이로 조절 */
         line-height:1.2;
         margin:0 0 .5rem 0;  /* 아래 여백만 */

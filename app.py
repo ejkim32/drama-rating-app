@@ -38,6 +38,14 @@ except Exception:
 def rmse(y_true, y_pred):
     return float(np.sqrt(mean_squared_error(y_true, y_pred)))
 
+# --- column helper (paste after `raw_df = load_data()` ) ---
+def _exists(col: str, df: pd.DataFrame = None) -> bool:
+    df = raw_df if df is None else df
+    try:
+        return col in df.columns
+    except Exception:
+        return False
+
 # ===== Dashboard CSS (once) =====
 def ensure_dashboard_css():
     if st.session_state.get("_chem_css_injected"):

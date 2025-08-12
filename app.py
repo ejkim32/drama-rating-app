@@ -276,16 +276,51 @@ def make_pipeline(model_name, kind, estimator):
 # 사이드바 네비게이션
 # ==============================
 st.title("💫 케미스코어")
-MENU_ITEMS = ["🏁 개요","📋 기초통계","📈 분포·교차","🔧 필터","🗂 전체보기","🧪 튜닝","🤖 ML모델","🎯 예측"]
-with st.sidebar:
-    st.markdown("### 📂 메뉴")
-    menu = st.radio("", MENU_ITEMS, index=0, key="nav_radio")
-    st.markdown("<style>section[data-testid='stSidebar']{width:260px !important}</style>", unsafe_allow_html=True)
-    # 모델 설정 (공통)
-    st.header("🤖 모델 설정")
-    test_size = 0.2
-    st.caption("노트북 재현 모드: test_size=0.2, random_state=42")
+NAV_ITEMS = [
+    ("overview", "🏠", "개요"),
+    ("basic",    "📋", "기초통계"),
+    ("dist",     "📈", "분포·교차"),
+    ("filter",   "🛠️", "필터"),
+    ("all",      "🗂️", "전체보기"),
+    ("tuning",   "🧪", "튜닝"),
+    ("ml",       "🤖", "ML모델"),
+    ("predict",  "🎯", "예측"),
+]
 
+# 현재 선택(쿼리파람에서 읽기)
+qp = st.query_params
+current = qp.get("nav", NAV_ITEMS[0][0])
+if isinstance(current, list):  # 안전처리
+    current = current[0]
+with st.sidebar:
+    st.markdown("""
+    <style>
+      /* 사이드바 폭/배경 */
+      section[data-testid="stSidebar"]{
+        width:80px !important; min-width:80px; background:#202331;
+      }
+      /* 아이콘 컨테이너 */
+      .chem-nav{display:flex; flex-direction:column; align-items:center; gap:18px; padding:12px 0 24px;}
+      /* 아이콘 버튼 */
+      .chem-nav a{
+        font-size:26px; width:46px; height:46px;
+        display:flex; align-items:center; justify-content:center;
+        text-decoration:none; border-radius:14px;
+        border:1px solid rgba(255,255,255,.15); color:#ffb7a5;
+        transition:all .15s ease;
+      }
+      .chem-nav a:hover{transform:translateY(-2px); border-color:#ff7a59; box-shadow:0 4px 12px rgba(0,0,0,.25);}
+      .chem-nav a.active{background:#ff7a59; color:#fff; border-color:#ff7a59;}
+      /* 툴팁 느낌(제목으로 노출) */
+    </style>
+    """, unsafe_allow_html=True)
+
+    html = ['<div class="chem-nav">']
+    for slug, icon, label in NAV_ITEMS:
+        cls = "active" if slug == current else ""
+        html.append(f'<a class="{cls}" href="?nav={slug}" title="{label}">{icon}</a>')
+    html.append("</div>")
+    st.markdown("".join(html), unsafe_allow_html=True)
 # ==============================
 # 페이지 함수들
 # ==============================
@@ -657,17 +692,15 @@ def page_predict():
     # (길어서 여기서는 생략할 수 없으니, 네 직전 버전의 with tabs[7]: 블록 내부 내용을 그대로 넣어주세요)
     st.info("여기에 기존 예측 섹션 전체 코드를 그대로 붙여넣었습니다. (현재 파일에서는 생략 표시만 했습니다)")
 
-# ==============================
-# 라우팅
-# ==============================
+# ===== 라우팅(선택에 따라 페이지 함수 호출) =====
 PAGES = {
-    "🏁 개요": page_overview,
-    "📋 기초통계": page_basic_stats,
-    "📈 분포·교차": page_dist_cross,
-    "🔧 필터": page_filter_live,
-    "🗂 전체보기": page_allview,
-    "🧪 튜닝": page_tuning,
-    "🤖 ML모델": page_ml,
-    "🎯 예측": page_predict,
+    "overview": page_overview,
+    "basic":    page_basic_stats,
+    "dist":     page_dist_cross,
+    "filter":   page_filter_live,
+    "all":      page_allview,
+    "tuning":   page_tuning,
+    "ml":       page_ml,
+    "predict":  page_predict,
 }
-PAGES[menu]()
+PAGES.get(current, page_overview)()

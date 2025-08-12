@@ -46,6 +46,15 @@ def _exists(col: str, df: pd.DataFrame = None) -> bool:
     except Exception:
         return False
 
+# --- helpers (add below _exists) ---
+def _uniq(obj) -> int:
+    """Series/iterable에서 NaN 제외 고유값 개수."""
+    try:
+        s = obj if isinstance(obj, pd.Series) else pd.Series(obj)
+        return int(s.dropna().astype(str).nunique())
+    except Exception:
+        return 0
+
 # ===== Dashboard CSS (once) =====
 def ensure_dashboard_css():
     if st.session_state.get("_chem_css_injected"):

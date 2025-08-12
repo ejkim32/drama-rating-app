@@ -1003,8 +1003,7 @@ with tabs[8]:
 
             # 테이블
             st.dataframe(
-                df_top[["카테고리","변경안","예측","리프트"]]
-                .style.format({"예측":"{:.3f}", "리프트":"{:+.3f}"}),
+                df_top[["카테고리","변경안"]],
                 use_container_width=True
             )
 

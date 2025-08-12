@@ -392,12 +392,6 @@ def page_overview():
         fig_p.update_layout(height=320, margin=dict(l=10, r=10, t=20, b=40))
         st.plotly_chart(fig_p, use_container_width=True)
 
-        fig = px.line(
-        df_year.groupby('start airing')['score'].mean().reset_index(),
-        x='start airing', y='score', markers=True)
-        fig.update_layout(height=380, margin=dict(l=10, r=10, t=20, b=40))
-        st.plotly_chart(fig, use_container_width=True)
-
 def page_basic():
     st.header("기초 통계: score")
     st.write(pd.to_numeric(raw_df['score'], errors='coerce').describe())

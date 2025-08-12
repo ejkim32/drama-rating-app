@@ -435,15 +435,22 @@ with tabs[2]:
     main_roles = raw_df[raw_df['role']=='주연'].copy()
     main_roles['결혼상태'] = main_roles['married'].apply(lambda x: '미혼' if x=='미혼' else '미혼 외')
     avg_scores_by_marriage = main_roles.groupby('결혼상태')['score'].mean()
-    fig, ax = plt.subplots(figsize=(3,3))
-    bars = ax.bar(avg_scores_by_marriage.index, avg_scores_by_marriage.values, color=['mediumseagreen','gray'])
+    fig, ax = plt.subplots(figsize=(2, 2))  # 크기 줄임
+    bars = ax.bar(avg_scores_by_marriage.index, avg_scores_by_marriage.values, 
+                  color=['mediumseagreen', 'gray'])
+    
     for b in bars:
         yv = b.get_height()
-        ax.text(b.get_x()+b.get_width()/2, yv+0.005, f'{yv:.3f}', ha='center', va='bottom', fontsize=12, fontweight='bold')
-    ax.set_title('주연 배우 결혼 상태별 평균 점수 비교'); ax.set_ylabel('평균 점수'); ax.set_xlabel('결혼 상태')
+        ax.text(b.get_x()+b.get_width()/2, yv+0.005, f'{yv:.3f}', 
+                ha='center', va='bottom', fontsize=10, fontweight='bold')
+    
+    ax.set_title('주연 배우 결혼 상태별 평균 점수 비교', fontsize=10)
+    ax.set_ylabel('평균 점수', fontsize=9)
+    ax.set_xlabel('결혼 상태', fontsize=9)
     ax.set_ylim(min(avg_scores_by_marriage.values)-0.05, max(avg_scores_by_marriage.values)+0.05)
     ax.grid(axis='y', linestyle='--', alpha=0.5)
-    st.pyplot(fig)
+    
+    st.pyplot(fig, use_container_width=False)
 
 # --- 4.4 워드클라우드 ---
 from wordcloud import WordCloud

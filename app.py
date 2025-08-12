@@ -290,37 +290,65 @@ NAV_ITEMS = [
 # 현재 선택(쿼리파람에서 읽기)
 qp = st.query_params
 current = qp.get("nav", NAV_ITEMS[0][0])
-if isinstance(current, list):  # 안전처리
-    current = current[0]
+# 처음 로드 시 기본값
+if "nav" not in st.session_state:
+    # 쿼리파람이 있으면 우선 적용
+    default_nav = st.query_params.get("nav", "overview")
+    if isinstance(default_nav, list):  # 안전 처리
+        default_nav = default_nav[0]
+    st.session_state["nav"] = default_nav
+
 with st.sidebar:
+    # 스타일(좁은 사이드바 + 아이콘형 버튼)
     st.markdown("""
     <style>
-      /* 사이드바 폭/배경 */
       section[data-testid="stSidebar"]{
         width:80px !important; min-width:80px; background:#202331;
       }
-      /* 아이콘 컨테이너 */
-      .chem-nav{display:flex; flex-direction:column; align-items:center; gap:18px; padding:12px 0 24px;}
-      /* 아이콘 버튼 */
-      .chem-nav a{
-        font-size:26px; width:46px; height:46px;
-        display:flex; align-items:center; justify-content:center;
-        text-decoration:none; border-radius:14px;
-        border:1px solid rgba(255,255,255,.15); color:#ffb7a5;
+      .chem-btn .stButton>button{
+        width:46px; height:46px; font-size:26px; line-height:1;
+        border-radius:14px; border:1px solid rgba(255,255,255,.15);
+        background:transparent; color:#ffb7a5;
         transition:all .15s ease;
       }
-      .chem-nav a:hover{transform:translateY(-2px); border-color:#ff7a59; box-shadow:0 4px 12px rgba(0,0,0,.25);}
-      .chem-nav a.active{background:#ff7a59; color:#fff; border-color:#ff7a59;}
-      /* 툴팁 느낌(제목으로 노출) */
+      .chem-btn .stButton>button:hover{
+        transform:translateY(-2px);
+        border-color:#ff7a59; box-shadow:0 4px 12px rgba(0,0,0,.25);
+      }
+      /* 활성 버튼 하이라이트 */
+      .chem-btn .active>button{
+        background:#ff7a59; color:#fff; border-color:#ff7a59;
+      }
+      /* 버튼 사이 간격 */
+      .chem-stack{display:flex; flex-direction:column; align-items:center; gap:14px; padding:12px 0 24px;}
     </style>
     """, unsafe_allow_html=True)
 
-    html = ['<div class="chem-nav">']
+    st.markdown('<div class="chem-stack">', unsafe_allow_html=True)
     for slug, icon, label in NAV_ITEMS:
-        cls = "active" if slug == current else ""
-        html.append(f'<a class="{cls}" href="?nav={slug}" title="{label}">{icon}</a>')
-    html.append("</div>")
-    st.markdown("".join(html), unsafe_allow_html=True)
+        # 활성 버튼엔 active 클래스를 추가하기 위해 container 사용
+        container = st.container()
+        container.markdown('<div class="chem-btn">', unsafe_allow_html=True)
+        # help=툴팁, key로 고유 식별
+        clicked = st.button(icon, key=f"btn_{slug}", help=label, use_container_width=False)
+        container.markdown('</div>', unsafe_allow_html=True)
+
+        # 활성 스타일 적용(한 번 더 렌더 시 active 클래스 부여)
+        if st.session_state.get("nav") == slug:
+            container.markdown("""
+            <style>
+              div[data-testid="stVerticalBlock"] div.chem-btn .stButton:has(button){ }
+              /* 위 container 내부의 버튼을 active로 재스타일 */
+            </style>
+            """, unsafe_allow_html=True)
+            # 위 CSS :has 지원이 브라우저마다 달라 간단히 재렌더로 커버
+
+        if clicked:
+            st.session_state["nav"] = slug
+            st.query_params(nav=slug)     # URL에도 반영(새 탭 아님)
+            st.rerun()                    # 현재 탭에서 즉시 전환
+    st.markdown('</div>', unsafe_allow_html=True)
+
 # ==============================
 # 페이지 함수들
 # ==============================
@@ -703,4 +731,4 @@ PAGES = {
     "ml":       page_ml,
     "predict":  page_predict,
 }
-PAGES.get(current, page_overview)()
+PAGES.get(st.session_state["nav"], page_overview)()

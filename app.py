@@ -24,6 +24,7 @@ from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.base import clone
 import re
 from sklearn.model_selection import KFold
+from sklearn.impute import SimpleImputer
 
 # XGB가 설치돼 있으면 쓰도록 안전하게 추가
 try:
@@ -227,7 +228,7 @@ df_mlb = colab_multilabel_fit_transform(raw_df, cols=('genres','day','network'))
 # ===== Colab 스타일 X/y, 전처리 정의 =====
 drop_cols = [c for c in ['배우명','드라마명','genres','day','network','score','start airing'] if c in df_mlb.columns]
 X_colab_base = df_mlb.drop(columns=drop_cols, errors='ignore')
-y_all = pd.to_numeric(df_mlb['score'], errors='coerce')  # ★ 숫자 보장
+y_all = df_mlb['score']
 
 categorical_features = [c for c in ['role','gender','air_q','married','age_group'] if c in X_colab_base.columns]
 
@@ -238,10 +239,22 @@ except TypeError:
     ohe = OneHotEncoder(drop='first', handle_unknown='ignore', sparse=False)
 
 preprocessor = ColumnTransformer(
-    transformers=[('cat', ohe, categorical_features)],
+    transformers=[
+        (
+            'cat',
+            Pipeline(steps=[
+                ('imputer', SimpleImputer(strategy='constant', fill_value='(missing)')),
+                ('ohe', OneHotEncoder(
+                    drop='first',
+                    handle_unknown='ignore',
+                    sparse_output=False   # 폴리/스케일러와 호환성↑
+                )),
+            ]),
+            categorical_features
+        )
+    ],
     remainder='passthrough'
 )
-
 # ===== EDA용 리스트 =====
 genre_list = [g for sub in raw_df.get('genres', pd.Series(dtype=object)).dropna().apply(clean_cell_colab) for g in sub]
 broadcaster_list = [b for sub in raw_df.get('network', pd.Series(dtype=object)).dropna().apply(clean_cell_colab) for b in sub]

@@ -158,7 +158,7 @@ def topbar(title: str, crumb: str = "HOME ▸ DASHBOARD"):
           </div>
           <div class="chem-right">
             <div class="chem-iconbtn" title="알림">🔔</div>
-            <div class="chem-chip">👤 Bethany Sparks</div>
+            <div class="chem-chip">👤 2조</div>
           </div>
         </div>
       </div>

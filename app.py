@@ -761,16 +761,16 @@ with st.sidebar:
         font-weight: 900;
     }
     section[data-testid="stSidebar"] .sb-brand .logo {
-        font-size: 40px !important;  /* 이모티콘 크기 */
+        font-size: 35px !important;  /* 이모티콘 크기 */
         line-height: 1;
     }
     section[data-testid="stSidebar"] .sb-brand .name {
-        font-size: 28px !important;  /* 글자 크기 */
+        font-size: 26px !important;  /* 글자 크기 */
         line-height: 1.2;
     }
     </style>
     <div class="sb-brand">
-        <span class="logo">🎬</span>
+        <span class="logo">💫</span>
         <span class="name">케미스코어</span>
     </div>
     """, unsafe_allow_html=True)

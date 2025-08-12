@@ -752,7 +752,26 @@ current = st.session_state["nav"]
 
 with st.sidebar:
     st.markdown('<div class="sb-wrap">', unsafe_allow_html=True)
-    st.markdown('<div class="sb-brand"><span class="logo">🎬</span><span class="name">케미스코어</span></div>', unsafe_allow_html=True)
+    st.markdown("""
+<style>
+.sb-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 900;
+}
+.sb-brand .logo {
+    font-size: 36px;  /* 이모티콘 크기 */
+}
+.sb-brand .name {
+    font-size: 28px;  /* 글자 크기 */
+}
+</style>
+<div class="sb-brand">
+    <span class="logo">🎬</span>
+    <span class="name">케미스코어</span>
+</div>
+""", unsafe_allow_html=True)
 
     # Navigation
     st.markdown('<div class="sb-menu">', unsafe_allow_html=True)

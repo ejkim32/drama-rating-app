@@ -735,7 +735,6 @@ with tabs[8]:
         input_role    = st.selectbox("역할", role_opts) if role_opts else st.text_input("역할 입력", "")
         input_married = st.selectbox("결혼여부", married_opts) if married_opts else st.text_input("결혼여부 입력", "")
         input_genre   = st.multiselect("장르 (멀티 선택)", genre_opts, default=genre_opts[:1] if genre_opts else [])
-
         derived_age_group = age_to_age_group(int(input_age))
 
         n_genre = len(input_genre)
@@ -758,7 +757,21 @@ with tabs[8]:
         input_week    = st.multiselect("방영요일 (멀티 선택)", week_opts, default=week_opts[:1] if week_opts else [])
         input_plat    = st.multiselect("플랫폼 (멀티 선택)", plat_opts, default=plat_opts[:1] if plat_opts else [])
 
-    predict_btn = st.button("예측 실행")
+        # 🎯 타깃 시청자 연령대 (여기로 이동)
+        age_group_candidates = ["10대", "20대", "30대", "40대", "50대", "60대 이상"]
+        data_age_groups = sorted(set(str(x) for x in raw_df.get("age_group", pd.Series([], dtype=object)).dropna().unique()))
+        opts_age_group = data_age_groups if data_age_groups else age_group_candidates
+    
+        target_age_group = st.selectbox(
+            "🎯 타깃 시청자 연령대",
+            options=opts_age_group,
+            index=min(1, len(opts_age_group)-1) if opts_age_group else 1
+        )
+
+        # What-if에서 쓰려고 세션에 저장
+        st.session_state["target_age_group"] = target_age_group
+        st.session_state["actor_age"] = int(input_age)
+        predict_btn = st.button("예측 실행")
 
     if predict_btn:
         if "best_estimator" in st.session_state:
@@ -808,59 +821,52 @@ with tabs[8]:
         st.session_state["cf_pred"] = float(pred)
         st.session_state["cf_model"] = model_full
 
-        
-
-        # =========================
-          # =========================
-        # 🔎 Counterfactual What-if  (REPLACED)
+                # =========================
+        # 🔎 Counterfactual What-if  (FINAL)
         # =========================
         st.markdown("---")
         st.subheader("🧪 What-if(카운터팩추얼) 탐색")
-
-        # 먼저 예측을 실행했는지 확인
-        _cf_raw = st.session_state.get("cf_user_raw")
-        _cf_pred = st.session_state.get("cf_pred")
+        
+        # 0) 먼저 예측을 실행했는지 확인 (predict 버튼에서 세션 저장 필수)
+        _cf_raw   = st.session_state.get("cf_user_raw")
+        _cf_pred  = st.session_state.get("cf_pred")
         _cf_model = st.session_state.get("cf_model")
         if _cf_raw is None or _cf_pred is None or _cf_model is None:
             st.info("먼저 위에서 **예측 실행**을 눌러주세요.")
             st.stop()
         
         # 세션에서 복구
-        user_raw = _cf_raw.copy()
+        user_raw     = _cf_raw.copy()
         current_pred = float(_cf_pred)
-        model_full = _cf_model
-
+        model_full   = _cf_model
         
-        # ── 타깃 시청자 연령대 입력 + 배우 나이와의 정렬 분석
-        age_group_candidates = [
-            "10대", "20대", "30대", "40대", "50대", "60대 이상"
-        ]
-        # 데이터에 있는 값 우선 사용, 없으면 기본 후보 사용
-        data_age_groups = sorted(
-            set(str(x) for x in raw_df.get("age_group", pd.Series([], dtype=object)).dropna().unique())
-        )
-        opts_age_group = data_age_groups if data_age_groups else age_group_candidates
-        target_age_group = st.selectbox("🎯 타깃 시청자 연령대", options=opts_age_group,
-                                        index=min(1, len(opts_age_group)-1) if opts_age_group else 1)
+        # 1) 편성 특성에서 입력한 타깃 연령대 / 배우 나이 세션에서 읽기
+        target_age_group = st.session_state.get("target_age_group")
+        actor_age        = st.session_state.get("actor_age")
+        if target_age_group is None or actor_age is None:
+            st.info("오른쪽 **편성 특성**에서 타깃 연령대, 왼쪽에서 배우 나이를 먼저 입력 후 예측을 실행하세요.")
+            st.stop()
         
         def _age_group_to_decade(s: str) -> int:
             m = re.search(r"(\d+)", str(s))
-            if m: 
+            if m:
                 n = int(m.group(1))
                 return 60 if "이상" in str(s) and n < 60 else n
             return 0
         
-        actor_decade  = (int(input_age)//10)*10
+        actor_decade  = (int(actor_age) // 10) * 10
         target_decade = _age_group_to_decade(target_age_group)
         gap = abs(actor_decade - target_decade)
         
         if gap >= 20:
-            st.info(f"배우 나이 {input_age}세(≈{actor_decade}대) vs 타깃 {target_age_group} → **연령대 격차 큼**. "
-                    "장르/편성/플랫폼을 타깃 성향에 맞춰 조정하는 변경안의 우선순위를 높이세요.")
+            st.info(
+                f"배우 나이 {actor_age}세(≈{actor_decade}대) vs 타깃 {target_age_group} → **연령대 격차 큼**. "
+                "장르/편성/플랫폼을 타깃 성향에 맞춘 변경안의 우선순위를 높이세요."
+            )
         else:
-            st.caption(f"배우 나이 {input_age}세(≈{actor_decade}대)와 타깃 {target_age_group}의 격차가 크지 않습니다.")
+            st.caption(f"배우 나이 {actor_age}세(≈{actor_decade}대)와 타깃 {target_age_group}의 격차가 크지 않습니다.")
         
-        # ── 공통 유틸: user_raw → user_base(feature vector)
+        # 2) 공통 유틸: user_raw → 모델 입력 벡터
         def _build_user_base(df_raw: pd.DataFrame) -> pd.DataFrame:
             _user_mlb = colab_multilabel_transform(df_raw, cols=('genres','day','network'))
             _base = pd.concat([X_colab_base.iloc[:0].copy(), _user_mlb], ignore_index=True)
@@ -869,9 +875,9 @@ with tabs[8]:
                 if c not in _base.columns:
                     _base[c] = 0
             _base = _base[X_colab_base.columns].tail(1)
-            # 숫자열만 숫자화/결측 보정 (카테고리는 건드리지 않음)
+            # 숫자열만 숫자화/결측 보정
             num_cols_ = X_colab_base.select_dtypes(include=[np.number]).columns.tolist()
-            if len(num_cols_) > 0:
+            if num_cols_:
                 _base[num_cols_] = _base[num_cols_].apply(pd.to_numeric, errors="coerce")
                 _base[num_cols_] = _base[num_cols_].replace([np.inf, -np.inf], np.nan).fillna(0.0)
             return _base
@@ -880,11 +886,7 @@ with tabs[8]:
             vb = _build_user_base(df_raw)
             return float(model_full.predict(vb)[0])
         
-        # 현재 입력 저장(What-if의 출발점)
-        st.session_state["cf_user_raw"] = user_raw.copy()
-        current_pred = float(pred)
-        
-        # ── 변경 가능한 액션 후보
+        # 3) 변경 가능한 액션 후보 만들기
         def _classes_safe(key: str):
             return [s for s in (st.session_state.get(f"mlb_classes_{key}", []) or [])]
         
@@ -893,9 +895,9 @@ with tabs[8]:
         network_classes = [n for n in _classes_safe("network") if isinstance(n, str)]
         
         priority_genres = [g for g in ["thriller","hist_war","sf","action","romance","drama","comedy"] if g in genre_classes]
-        saturday_only   = ["saturday"] if "saturday" in day_classes else (day_classes[:1] if day_classes else [])
-        friday_only     = ["friday"]   if "friday"   in day_classes else []
-        wednesday_only  = ["wednesday"]if "wednesday"in day_classes else []
+        saturday_only   = ["saturday"]  if "saturday"  in day_classes else (day_classes[:1] if day_classes else [])
+        friday_only     = ["friday"]    if "friday"    in day_classes else []
+        wednesday_only  = ["wednesday"] if "wednesday" in day_classes else []
         netflix         = "NETFLIX" if "NETFLIX" in network_classes else (network_classes[0] if network_classes else None)
         tvn             = "TVN" if "TVN" in network_classes else None
         
@@ -909,7 +911,7 @@ with tabs[8]:
                 return new
             return _fn
         
-        def _set_days(days_list: list[str]):
+        def _set_days(days_list):
             def _fn(df):
                 new = df.copy()
                 new.at[0, "day"] = days_list
@@ -953,13 +955,12 @@ with tabs[8]:
             actions.append(("ensure_netflix", "플랫폼 포함: NETFLIX", _ensure_platform(netflix)))
         if tvn:
             actions.append(("ensure_tvn", "플랫폼 포함: TVN", _ensure_platform(tvn)))
-        if "role" in user_raw.columns:
-            if str(user_raw.at[0,"role"]) != "주연":
-                actions.append(("set_lead", "역할: 주연으로 변경", _set_role("주연")))
+        if "role" in user_raw.columns and str(user_raw.at[0,"role"]) != "주연":
+            actions.append(("set_lead", "역할: 주연으로 변경", _set_role("주연")))
         if "married" in user_raw.columns and str(user_raw.at[0,"married"]) != "미혼":
             actions.append(("set_single", "결혼여부: 미혼으로 변경", _set_married("미혼")))
         
-        # ── 단일/조합 평가
+        # 4) 단일/조합 평가
         rows = []
         for aid, desc, fn in actions:
             cand = fn(user_raw)
@@ -980,19 +981,18 @@ with tabs[8]:
         import pandas as _pd
         df_cf = _pd.DataFrame(rows)
         
-        # ── 상위 5개 표 (head(5))
+        # 5) 상위 5개 표 + 솔루션 설명
         if not df_cf.empty:
             df_sorted = df_cf.sort_values(["예측","리프트","편집수"], ascending=[False, False, True])
             df_view = (df_sorted[["종류","설명","예측","리프트","편집수","아이디"]]
                        .head(5).reset_index(drop=True))
-            st.dataframe(df_view.drop(columns=["아이디"])
-                         .style.format({"예측":"{:.3f}","리프트":"{:+.3f}"}),
-                         use_container_width=True)
+            st.dataframe(
+                df_view.drop(columns=["아이디"]).style.format({"예측":"{:.3f}","리프트":"{:+.3f}"}),
+                use_container_width=True
+            )
         
-            # ── 액션별 설명(솔루션) 자동 생성
             st.markdown("#### 🔍 액션별 솔루션 요약")
         
-            # 장르/요일/플랫폼/역할/결혼여부에 대한 간단한 해석 사전
             genre_reason = {
                 "thriller": "긴장감·몰입도 상승으로 사용자 체류시간/평점에 우호적.",
                 "hist_war": "작품성·완성도 포인트로 평점 상향에 기여.",
@@ -1019,55 +1019,39 @@ with tabs[8]:
             def _line_for(row):
                 desc = row["설명"]
                 why  = []
-                # 장르
                 m = re.search(r"장르 추가:\s*([A-Za-z_]+)", desc)
                 if m:
                     g = m.group(1).lower()
                     if g in genre_reason:
                         why.append(f"장르 효과: {genre_reason[g]}")
-                    # 타깃 연령대 힌트
                     if target_decade <= 20 and g in {"romance","comedy","action"}:
                         why.append("타깃 젊은층과의 톤 매칭 양호.")
                     if target_decade >= 40 and g in {"hist_war","drama","thriller"}:
                         why.append("성숙 타깃의 선호 주제와 부합.")
-                # 요일
                 if "토요일" in desc or "saturday" in desc:
                     why.append(f"편성 효과: {day_reason['토요일']}")
                 if "금요일" in desc or "friday" in desc:
                     why.append(f"편성 효과: {day_reason['금요일']}")
                 if "수요일" in desc or "wednesday" in desc:
                     why.append(f"편성 효과: {day_reason['수요일']}")
-                # 플랫폼
                 if "NETFLIX" in desc:
                     why.append(f"플랫폼 효과: {platform_reason['NETFLIX']}")
                 if "TVN" in desc:
                     why.append(f"플랫폼 효과: {platform_reason['TVN']}")
-                # 역할/결혼
                 if "주연" in desc:
                     why.append(f"캐스팅 효과: {etc_reason['주연']}")
                 if "미혼" in desc:
                     why.append(f"캐릭터 톤: {etc_reason['미혼']}")
-        
                 why_txt = " / ".join(why) if why else "데이터 기반 상 상승 요인."
                 return f"- **{desc}** → 예상 {row['예측']:.3f}점 ({row['리프트']:+.3f}) · {why_txt}"
-        
-            # 연령대 정렬 가이드
-            st.markdown("**🎯 타깃-배우 연령대 정렬 가이드**")
-            if target_decade <= 20:
-                st.markdown("- 톤/장르: romance · comedy · action 위주, 가벼운 몰입 유도")
-                st.markdown("- 편성: 토요일/주말 강세, 클립 중심 SNS 확산 고려")
-            elif target_decade <= 30:
-                st.markdown("- 톤/장르: romance/drama에 스릴러/미스터리 가미(하이브리드)")
-                st.markdown("- 플랫폼: OTT 동시 공개로 화제성 확보")
-            elif target_decade <= 40:
-                st.markdown("- 톤/장르: drama / thriller / society 중심, 주제 밀도를 높임")
-                st.markdown("- 편성: 주중 집중, 에피소드 퀄리티 변동 최소화")
-            else:
-                st.markdown("- 톤/장르: hist_war / family / society, 스토리 완성도·메시지 강화")
-                st.markdown("- 편성: 시청 루틴 반영한 안정적 슬롯")
         
             st.markdown("**📝 상위 5개 변경안 솔루션**")
             for _, r in df_view.iterrows():
                 st.markdown(_line_for(r))
+
+
+        
+
+        
     
       

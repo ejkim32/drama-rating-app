@@ -736,6 +736,49 @@ with tabs[2]:
     plt.tight_layout()
     st.pyplot(fig)
 
+    # ====== 그래프 아래 요약 & 인사이트 ======
+    # 1) 작품 수 톱3
+    age_top = age_counts.sort_values(ascending=False)
+    top_items = [f"{idx} {int(val)}편" for idx, val in age_top.head(3).items()]
+    top_txt = " · ".join(top_items) if len(top_items) else "N/A"
+    
+    # 2) 성별별 최고/최저 평균
+    def safe_max(s):
+        s = s.dropna()
+        return (s.idxmax(), float(s.max())) if not s.empty else (None, np.nan)
+    
+    def safe_min(s):
+        s = s.dropna()
+        return (s.idxmin(), float(s.min())) if not s.empty else (None, np.nan)
+    
+    m_best_age, m_best = safe_max(male_vals)
+    f_best_age, f_best = safe_max(female_vals)
+    f_worst_age, f_worst = safe_min(female_vals)
+    
+    def fmt(v): 
+        return f"{v:.3f}" if (v is not None and not np.isnan(v)) else "N/A"
+    def nz(s): 
+        return s if s is not None else "N/A"
+    
+    st.markdown(
+        f"""
+    **요약(데이터 근거)**  
+    - 작품 수 상위: **{top_txt}**  
+    - 남성 최고 평균: **{nz(m_best_age)} {fmt(m_best)}**  
+    - 여성 최고 평균: **{nz(f_best_age)} {fmt(f_best)}**  
+    - 여성 최저 평균: **{nz(f_worst_age)} {fmt(f_worst)}**
+    
+    **인사이트(요약)**  
+    - **캐스팅 집중**: 로맨스·청춘·판타지·직장물·성장 서사 등 주류 장르의 주인공 설정이 **20–30대**에 맞춰져, 해당 연령대에 **주연 기회가 집중**됩니다.  
+    - **50대+ 수량이 적은 이유**: 캐릭터가 부모/상사/조력자·악역 등 **조연 축**에 배치되기 쉬워 주연 편수가 적고, 신진 배우 유입도 제한적이라 **배우 풀 자체가 작음**.  
+    - **성별 격차 패턴**:  
+      - 남성은 **40–50대**에도 CEO/검사/형사/변호사 등 **중심축 역할**을 맡으며 평균 점수가 비교적 **안정적**입니다.  
+      - 여성은 연령이 높아질수록 **중심 서사에서 비중이 줄어**(엄마·장모·할머니 등 주변 인물), **평균 점수가 하락하는 경향**이 관찰됩니다.  
+    - **실무 시사점**: 연령·성별 편중을 완화하려면 **장르·캐릭터 설계 단계**에서 다양한 연령대의 **주도적 역할**을 의도적으로 기획하는 접근이 필요합니다.
+    """
+    )
+
+
 
 # --- 4.4 워드클라우드 ---
 from wordcloud import WordCloud

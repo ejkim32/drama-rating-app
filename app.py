@@ -449,7 +449,6 @@ with tabs[2]:
     ax.set_xlabel('결혼 상태', fontsize=9)
     ax.set_ylim(min(avg_scores_by_marriage.values)-0.05, max(avg_scores_by_marriage.values)+0.05)
     ax.grid(axis='y', linestyle='--', alpha=0.5)
-    st.pyplot(fig)
     
     st.pyplot(fig, use_container_width=False)
     m_single = avg_scores_by_marriage.get('미혼')
@@ -509,7 +508,7 @@ with tabs[2]:
     ax1.set_xlabel('장르')
     ax1.grid(axis='y', linestyle='--', alpha=0.5)
     plt.tight_layout()
-    st.pyplot(fig)
+    st.pyplot(fig, use_container_width=False)
 
 
     # 요약 + 인사이트
@@ -556,7 +555,7 @@ with tabs[2]:
     for x, yv in zip(ordered, mean_by.values):
         if pd.notna(yv): ax2.text(x, yv+0.005, f'{yv:.3f}', color='tab:blue', fontsize=9, ha='center')
     ax1.set_xticks(ordered); ax1.set_xticklabels([day_ko[d] for d in ordered])
-    plt.title('방영 요일별 작품 수 및 평균 점수 (월요일 → 일요일 순)'); plt.tight_layout(); st.pyplot(fig)
+    plt.title('방영 요일별 작품 수 및 평균 점수 (월요일 → 일요일 순)'); plt.tight_layout(); st.pyplot(fig,use_container_width=False)
 
     weekday = ['monday','tuesday','wednesday','thursday']
     weekend = ['friday','saturday','sunday']
@@ -621,7 +620,7 @@ with tabs[2]:
 
     plt.title('방영년도별 작품 수 및 평균 점수')
     plt.tight_layout()
-    st.pyplot(fig)
+    st.pyplot(fig, use_container_width=False)
 
     # 상관/성장 요약
     valid_mask = mean_s.notna() & count_s.notna()
@@ -678,7 +677,7 @@ with tabs[2]:
     male_vals   = ga[ga['gender']=='남자'].set_index('age_group').reindex(age_order)['score']
     female_vals = ga[ga['gender']=='여자'].set_index('age_group').reindex(age_order)['score']
 
-    fig, ax1 = plt.subplots(figsize=(10, 6))
+    fig, ax1 = plt.subplots(figsize=(6, 6))
     bars = ax1.bar(age_order, age_counts.values, color='lightgray', label='작품 수')
     ax1.set_ylabel('작품 수', fontsize=12)
     ax1.set_ylim(0, max(age_counts.max()*1.2, age_counts.max()+2))
@@ -714,7 +713,7 @@ with tabs[2]:
     ax1.grid(axis='y', linestyle='--', alpha=0.4)
     ax1.legend([line1, line2], ['남자','여자'], loc='upper left')
     plt.tight_layout()
-    st.pyplot(fig)
+    st.pyplot(fig, use_container_width=False)
 
 # --- 4.4 워드클라우드 ---
 from wordcloud import WordCloud

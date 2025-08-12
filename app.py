@@ -708,13 +708,13 @@ with st.sidebar:
     # Navigation
     st.markdown('<div class="sb-menu">', unsafe_allow_html=True)
     for slug, icon, label, _fn in NAV_ITEMS:
-    active = (slug == current)
-    st.markdown(f'<div class="sb-nav {"active" if active else ""}">', unsafe_allow_html=True)
-    if st.button(f"{icon}  {label}", key=f"nav_{slug}", use_container_width=True):
-        st.session_state["nav"] = slug
-        _set_nav_query(slug)
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+        active = (slug == current)
+        st.markdown(f'<div class="sb-nav {"active" if active else ""}">', unsafe_allow_html=True)
+        if st.button(f"{icon}  {label}", key=f"nav_{slug}", use_container_width=True):
+            st.session_state["nav"] = slug
+            _set_nav_query(slug)
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     # Card: model config
     st.markdown('<div class="sb-card"><h4>모델 설정</h4>', unsafe_allow_html=True)
     test_size = 0.2

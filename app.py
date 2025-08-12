@@ -1092,7 +1092,7 @@ with tabs[8]:
             'genres'   : input_genre,
             'day'      : input_week,
             'network'  : input_plat,
-            '장르구분'    : genre_group_label,   # (참고용)
+            '장르구분'    : genre_bucket,   # (참고용)
         }])
 
         user_mlb = colab_multilabel_transform(user_raw, cols=('genres','day','network'))

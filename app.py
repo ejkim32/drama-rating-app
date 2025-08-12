@@ -232,11 +232,7 @@ raw_df = load_data()
 # ===== 멀티라벨 인코딩 결과 생성 (genres / day / network) =====
 df_mlb = colab_multilabel_fit_transform(raw_df, cols=('genres','day','network'))
 
-# 점수/연도 숫자 처리
-if 'score' in df_mlb.columns:
-    df_mlb['score'] = pd.to_numeric(df_mlb['score'], errors='coerce')
-if 'start airing' in df_mlb.columns:
-    df_mlb['start airing'] = pd.to_numeric(df_mlb['start airing'], errors='coerce')
+
 
 # ===== Colab 스타일 X/y, 전처리 정의 =====
 drop_cols = [c for c in ['배우명','드라마명','genres','day','network','score','start airing'] if c in df_mlb.columns]  # start airing 포함

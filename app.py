@@ -378,10 +378,15 @@ def page_overview():
         _p = raw_df.copy()
         _p['network'] = _p['network'].apply(clean_cell_colab)
         _p = _p.explode('network').dropna(subset=['network'])
-        p_cnt = (
-            _p['network'].value_counts().head(10).reset_index()
-              .rename(columns={'index':'network', 'network':'count'})
-        )
+       p_cnt = (
+                raw_df.assign(network=raw_df["network"].apply(clean_cell_colab))
+                      .explode("network")
+                      .dropna(subset=["network"])
+                      .groupby("network")
+                      .size()
+                      .reset_index(name="count")        # ← name을 명시해서 중복 방지)
+        p_cnt = p_cnt.loc[:, ~p_cnt.columns.duplicated()].copy()
+
         fig_p = px.bar(p_cnt, x='network', y='count')
         fig_p.update_layout(height=320, margin=dict(l=10, r=10, t=20, b=40))
         st.plotly_chart(fig_p, use_container_width=True)

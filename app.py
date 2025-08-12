@@ -927,7 +927,51 @@ with tabs[6]:
     base_grid = default_param_grids.get(model_name, {})
     user_grid = {}
     for param_key, default_vals in base_grid.items():
-        user_vals = render_param_selector(param_key, def
+        user_vals = render_param_selector(param_key, default_vals)
+        user_grid[param_key] = user_vals if len(user_vals) > 0 else default_vals
+
+    with st.expander("선택한 파라미터 확인"):
+        st.write(user_grid)
+
+    # ---- 실행 ----
+    if st.button("GridSearch 실행"):
+        gs = GridSearchCV(
+            pipe,
+            user_grid,  # ← 사용자 선택 그리드 사용!
+            cv=int(cv),
+            scoring=scoring,
+            n_jobs=-1,
+            refit=True,
+            return_train_score=True
+        )
+        with st.spinner("GridSearchCV 실행 중..."):
+            gs.fit(X_train, y_train)
+
+        st.subheader("베스트 결과")
+        st.json(gs.best_params_)
+        if scoring == "neg_root_mean_squared_error":
+            st.write(f"Best CV RMSE: {-gs.best_score_:.6f}")
+        else:
+            st.write(f"Best CV {scoring}: {gs.best_score_:.6f}")
+
+        y_pred = gs.predict(X_test)
+        st.write(f"Test RMSE: {rmse(y_test, y_pred):.6f}")
+        st.write(f"Test R²  : {r2_score(y_test, y_pred):.6f}")
+
+        # 모델 재사용 저장
+        st.session_state["best_estimator"] = gs.best_estimator_
+        st.session_state["best_params"] = gs.best_params_
+        st.session_state["best_name"] = model_name
+        st.session_state["best_cv_score"] = gs.best_score_
+        st.session_state["best_scoring"] = scoring
+        st.session_state["best_split_key"] = st.session_state.get("split_key")
+
+        cvres = pd.DataFrame(gs.cv_results_)
+        cols = ["rank_test_score","mean_test_score","std_test_score","mean_train_score","std_train_score","params"]
+        st.dataframe(cvres[cols].sort_values("rank_test_score").reset_index(drop=True))
+
+    if model_name == "XGBRegressor" and not XGB_AVAILABLE:
+        st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
 
 
 # --- 4.8 머신러닝 모델링 ---

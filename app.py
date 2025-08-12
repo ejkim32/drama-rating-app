@@ -96,7 +96,7 @@ def _inject_sparrow_css():
       h1,h2,h3{font-weight:800;}
       /* 연도별 평균 케미스코어 그래프 위쪽 간격 */
     h3, .stPlotlyChart {
-            margin-top: 2rem !important;
+            margin-top: 4rem !important;
         }
       /* ---------- Topbar ---------- */
       .topbar{display:flex; align-items:flex-end; justify-content:space-between; margin:6px 0 14px;}

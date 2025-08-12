@@ -343,34 +343,34 @@ def page_overview():
 
     c1, c2 = st.columns([1, 1])
     with c1:
-    st.subheader("최근 연도 상위 작품 (중복 제거)")
-    _df = raw_df.copy()
-    _df['start airing'] = pd.to_numeric(_df['start airing'], errors='coerce')
-    _df['score'] = pd.to_numeric(_df['score'], errors='coerce')
-    _df = _df.dropna(subset=['start airing', 'score'])
-
-    if not _df.empty:
-        last_year = int(_df['start airing'].max())
-        # 최근 1년 또는 2년 범위 (원하면 범위 조정 가능)
-        recent = _df[_df['start airing'].between(last_year-1, last_year)]
-
-        name_col = '드라마명' if '드라마명' in recent.columns else (
-            'title' if 'title' in recent.columns else recent.columns[0]
-        )
-
-        # 드라마명 기준 중복 제거 (가장 높은 점수만 남김)
-        recent_unique = (
-            recent.sort_values('score', ascending=False)
-                  .drop_duplicates(subset=[name_col], keep='first')
-        )
-
-        top_recent = recent_unique.sort_values('score', ascending=False).head(10)
-        fig_recent = px.bar(top_recent, x=name_col, y='score', text='score')
-        fig_recent.update_traces(texttemplate='%{text:.2f}', textposition='outside')
-        fig_recent.update_layout(height=320, margin=dict(l=10, r=10, t=20, b=40))
-        st.plotly_chart(fig_recent, use_container_width=True)
-    else:
-        st.info("최근 연도 데이터가 없습니다.")
+        st.subheader("최근 연도 상위 작품 (중복 제거)")
+        _df = raw_df.copy()
+        _df['start airing'] = pd.to_numeric(_df['start airing'], errors='coerce')
+        _df['score'] = pd.to_numeric(_df['score'], errors='coerce')
+        _df = _df.dropna(subset=['start airing', 'score'])
+    
+        if not _df.empty:
+            last_year = int(_df['start airing'].max())
+            # 최근 1년 또는 2년 범위 (원하면 범위 조정 가능)
+            recent = _df[_df['start airing'].between(last_year-1, last_year)]
+    
+            name_col = '드라마명' if '드라마명' in recent.columns else (
+                'title' if 'title' in recent.columns else recent.columns[0]
+            )
+    
+            # 드라마명 기준 중복 제거 (가장 높은 점수만 남김)
+            recent_unique = (
+                recent.sort_values('score', ascending=False)
+                      .drop_duplicates(subset=[name_col], keep='first')
+            )
+    
+            top_recent = recent_unique.sort_values('score', ascending=False).head(10)
+            fig_recent = px.bar(top_recent, x=name_col, y='score', text='score')
+            fig_recent.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+            fig_recent.update_layout(height=320, margin=dict(l=10, r=10, t=20, b=40))
+            st.plotly_chart(fig_recent, use_container_width=True)
+        else:
+            st.info("최근 연도 데이터가 없습니다.")
 
     # (오른쪽) 플랫폼별 작품 수 TOP 10
     with c2:

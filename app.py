@@ -761,13 +761,14 @@ with tabs[8]:
         age_group_candidates = ["10대", "20대", "30대", "40대", "50대", "60대 이상"]
         data_age_groups = sorted(set(str(x) for x in raw_df.get("age_group", pd.Series([], dtype=object)).dropna().unique()))
         opts_age_group = data_age_groups if data_age_groups else age_group_candidates
-    
+        safe_index = 0 if not opts_age_group else min(1, len(opts_age_group)-1)
+
         target_age_group = st.selectbox(
             "🎯 타깃 시청자 연령대",
-            options=opts_age_group,
-            index=min(1, len(opts_age_group)-1) if opts_age_group else 1
+            options=opts_age_group if opts_age_group else ["(데이터 없음)"],
+            index=safe_index,
+            key="target_age_group_main"   # ✅ 고유 키 추가
         )
-
         # What-if에서 쓰려고 세션에 저장
         st.session_state["target_age_group"] = target_age_group
         st.session_state["actor_age"] = int(input_age)

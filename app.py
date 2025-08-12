@@ -950,7 +950,7 @@ with tabs[6]:
             st.json(st.session_state["best_params"])
 
 # --- 4.9 예측 실행 + 카운터팩추얼 ---
-with tabs[8]:
+with tabs[7]:
     st.header("평점 예측")
 
     genre_opts   = sorted({g for sub in raw_df['genres'].dropna().apply(clean_cell_colab) for g in sub})

@@ -493,6 +493,37 @@ with tabs[2]:
     plt.title('장르별 작품 수 및 평균 점수'); ax1.set_xlabel('장르'); ax1.grid(axis='y', linestyle='--', alpha=0.5)
     plt.tight_layout(); st.pyplot(fig)
 
+    # ====== 요약(데이터) + 인사이트 출력 ======
+    # 상/하위 장르 정리
+    top_cnt = gdf.nlargest(3, '작품 수')
+    low_cnt = gdf.nsmallest(3, '작품 수')
+    top_score = gdf.nlargest(4, '평균 점수')  # 상위 4개 정도
+    
+    def fmt_counts(df):
+        return ", ".join([f"{r['장르']}({int(r['작품 수']):,}편)" for _, r in df.iterrows()])
+    
+    def fmt_scores(df):
+        return ", ".join([f"{r['장르']}({r['평균 점수']:.3f})" for _, r in df.iterrows()])
+    
+    st.markdown(
+        f"""
+    **요약(데이터 근거)**  
+    - 작품 수 상위: **{fmt_counts(top_cnt)}**  
+    - 작품 수 하위: **{fmt_counts(low_cnt)}**  
+    - 평균 평점 상위: **{fmt_scores(top_score)}**
+    
+    **인사이트(생산량)**  
+    - **romance / drama / comedy**는 보편적 감정선과 일상 배경으로 **비용 대비 효율**이 높고, 폭넓은 시청층을 확보하기 좋아 **반복 제작**이 이루어집니다.  
+    - **action / sf / hist_war**는 CG·무술·대규모 세트·역사 고증 등으로 **제작비·제작기간 부담**이 커 상대적으로 **물량이 적은** 편입니다.
+    
+    **인사이트(평점)**  
+    - **hist_war, thriller, sf**는 마니아층 중심으로 **완성도와 개성**이 평가 포인트가 되며 **평점이 높게 형성**되는 경향이 있습니다.  
+    - 반면 **romance, society**는 삼각관계·출생의 비밀 등 **감정 서사의 반복**으로 중후반 전개에 따라 **호불호**가 커져 평균 점수가 상대적으로 낮아질 수 있습니다.  
+    - **action / sf**는 시각적 임팩트가 커 OTT/온라인 시청 환경에서 **초기 만족도(첫인상 효과)**가 높게 나타나 평균 점수를 끌어올리기도 합니다.
+    """
+    )
+
+
     st.subheader("방영 요일별 작품 수 및 평균 점수 (월→일)")
     dfe = raw_df.copy(); dfe['방영요일'] = dfe['방영요일'].apply(clean_cell_colab)
     dfe = dfe.explode('방영요일').dropna(subset=['방영요일','점수']).copy()
@@ -513,6 +544,45 @@ with tabs[2]:
         if pd.notna(yv): ax2.text(x, yv+0.005, f'{yv:.3f}', color='tab:blue', fontsize=9, ha='center')
     ax1.set_xticks(ordered); ax1.set_xticklabels([day_ko[d] for d in ordered])
     plt.title('방영 요일별 작품 수 및 평균 점수 (월요일 → 일요일 순)'); plt.tight_layout(); st.pyplot(fig)
+
+    # ====== 요약(데이터) + 인사이트 출력 ======
+    weekday = ['monday','tuesday','wednesday','thursday']
+    weekend = ['friday','saturday','sunday']
+    
+    wk_avg = mean_by.loc[weekday].mean(skipna=True)
+    we_avg = mean_by.loc[weekend].mean(skipna=True)
+    
+    top_day_en  = mean_by.idxmax() if mean_by.notna().any() else None
+    top_day_ko  = day_ko.get(top_day_en, "N/A") if top_day_en else "N/A"
+    top_mean    = float(mean_by.max()) if mean_by.notna().any() else float("nan")
+    
+    wk_cnt = int(cnt_by.loc[weekday].sum())
+    we_cnt = int(cnt_by.loc[weekend].sum())
+    
+    st.markdown(
+        f"""
+    **요약(데이터 근거)**  
+    - 주중 평균 평점(월~목): **{wk_avg:.3f}** · 주중 작품 수 합계: **{wk_cnt}편**  
+    - 주말 평균 평점(금~일): **{we_avg:.3f}** · 주말 작품 수 합계: **{we_cnt}편**  
+    - 평균 평점 최고 요일: **{top_day_ko} {top_mean:.3f}점**
+    
+    **인사이트(요약)**  
+    - **주중(월~목)**: 일상 편성 비중이 높고, 다양한 연령/취향을 겨냥한 **보편적 콘텐츠**가 많음.  
+      제작 속도·양산성, **시청률 지향** 편성이 상대적으로 두드러짐.  
+    - **금요일**: 한 주 피로와 외부 일정(회식·외출·주말 준비)로 **실시간 시청 집중도 낮음** →  
+      방송사는 **예능·뉴스·영화 대체 편성**을 택하는 경우가 많아 드라마 편성/성과가 약함.  
+    - **일요일**: 다음 날이 월요일이라 **가벼운 콘텐츠 선호**. 전통적으로 예능이 프라임을 장악 →  
+      드라마 **편성 수요 자체가 낮은 구조**.  
+    - **토요일**: 시간적 여유 + 다음 날 휴식으로 **시청률·몰입·광고 효과가 최대**.  
+      고품질 작품을 집중 투입하며 **경쟁이 가장 치열**한 요일.  
+    
+    **해석 메모**  
+    - 주중은 피로·시간 제약 탓에 **완주율/몰입도가 낮아** 호불호가 강하게 나타나기 쉬움.  
+    - 주말(특히 토요일) 편성은 기획 단계부터 **타깃·예산·완성도**가 높은 전략 편성이 많아,  
+      **감정 몰입**이 잘 일어나고 좋은 작품일수록 **우호적 평가**가 형성되는 경향이 있습니다.
+    """
+    )
+
 
     # --- 주연 배우 성별 인원수 및 비율 ---
     st.subheader("주연 배우 성별 인원수 및 비율")

@@ -895,3 +895,167 @@ with tabs[8]:
 
         pred = model_full.predict(user_base)[0]
         st.success(f"💡 예상 평점: {pred:.2f}")
+                # =========================
+        # 🔎 Counterfactual What-if
+        # =========================
+        st.markdown("---")
+        st.subheader("🧪 What-if(카운터팩추얼) 탐색")
+
+        # ── 공통 유틸: user_raw → user_base(feature vector)
+        def _build_user_base(df_raw: pd.DataFrame) -> pd.DataFrame:
+            _user_mlb = colab_multilabel_transform(df_raw, cols=('genres','day','network'))
+            _base = pd.concat([X_colab_base.iloc[:0].copy(), _user_mlb], ignore_index=True)
+            _base = _base.drop(columns=[c for c in drop_cols if c in _base.columns], errors='ignore')
+            for c in X_colab_base.columns:
+                if c not in _base.columns:
+                    _base[c] = 0
+            _base = _base[X_colab_base.columns].tail(1)
+            # 폴리노미얼/스케일러 안정화: 숫자화 + 결측 0
+            _base = _base.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+            return _base
+
+        def _predict_from_raw(df_raw: pd.DataFrame) -> float:
+            vb = _build_user_base(df_raw)
+            return float(model_full.predict(vb)[0])
+
+        # 현재 입력 저장(What-if의 출발점)
+        st.session_state["cf_user_raw"] = user_raw.copy()
+        current_pred = float(pred)
+
+        # ── 변경 가능한 액션(필요시 자유롭게 추가/수정)
+        # 후보 라벨은 실제 학습에 존재하는 값만 사용(mlb classes 참조)
+        def _classes_safe(key: str):
+            return [s for s in (st.session_state.get(f"mlb_classes_{key}", []) or [])]
+
+        genre_classes   = [g for g in _classes_safe("genres") if isinstance(g, str)]
+        day_classes     = [d for d in _classes_safe("day") if isinstance(d, str)]
+        network_classes = [n for n in _classes_safe("network") if isinstance(n, str)]
+
+        # 우선순위 장르(데이터에 있는 것만 남김)
+        priority_genres = [g for g in ["thriller","hist_war","sf","action","romance","drama","comedy"] if g in genre_classes]
+        # 요일 후보
+        saturday_only   = ["saturday"] if "saturday" in day_classes else (day_classes[:1] if day_classes else [])
+        friday_only     = ["friday"]   if "friday"   in day_classes else []
+        wednesday_only  = ["wednesday"]if "wednesday"in day_classes else []
+        # 플랫폼 후보
+        netflix         = "NETFLIX" if "NETFLIX" in network_classes else (network_classes[0] if network_classes else None)
+        tvn             = "TVN" if "TVN" in network_classes else None
+
+        # 액션 정의: (id, 설명, 적용함수)
+        # 적용함수는 user_raw(DataFrame) 하나를 받아서 변경된 DataFrame을 반환
+        def _add_genre(tag: str):
+            def _fn(df):
+                new = df.copy()
+                cur = list(new.at[0, "genres"])
+                if tag not in cur:
+                    cur = cur + [tag]
+                new.at[0, "genres"] = cur
+                return new
+            return _fn
+
+        def _set_days(days_list: list[str]):
+            def _fn(df):
+                new = df.copy()
+                new.at[0, "day"] = days_list
+                return new
+            return _fn
+
+        def _ensure_platform(p: str):
+            def _fn(df):
+                new = df.copy()
+                cur = list(new.at[0, "network"])
+                if p not in cur:
+                    cur = cur + [p]
+                new.at[0, "network"] = cur
+                return new
+            return _fn
+
+        def _set_role(val: str):
+            def _fn(df):
+                new = df.copy()
+                new.at[0, "role"] = val
+                return new
+            return _fn
+
+        def _set_married(val: str):
+            def _fn(df):
+                new = df.copy()
+                new.at[0, "married"] = val
+                return new
+            return _fn
+
+        # 단일 액션 후보들
+        actions = []
+        for g in priority_genres:
+            actions.append((f"add_genre_{g}", f"장르 추가: {g}", _add_genre(g)))
+        if saturday_only:
+            actions.append(("set_sat_only", "편성 요일: 토요일 단일", _set_days(saturday_only)))
+        if friday_only:
+            actions.append(("set_fri_only", "편성 요일: 금요일 단일", _set_days(friday_only)))
+        if wednesday_only:
+            actions.append(("set_wed_only", "편성 요일: 수요일 단일", _set_days(wednesday_only)))
+        if netflix:
+            actions.append(("ensure_netflix", "플랫폼 포함: NETFLIX", _ensure_platform(netflix)))
+        if tvn:
+            actions.append(("ensure_tvn", "플랫폼 포함: TVN", _ensure_platform(tvn)))
+
+        # role / married가 데이터에 있다면 액션 추가
+        if "role" in user_raw.columns:
+            if str(user_raw.at[0,"role"]) != "주연":
+                actions.append(("set_lead", "역할: 주연으로 변경", _set_role("주연")))
+        if "married" in user_raw.columns and str(user_raw.at[0,"married"]) != "미혼":
+            actions.append(("set_single", "결혼여부: 미혼으로 변경", _set_married("미혼")))
+
+        # ── 단일 액션 평가
+        rows = []
+        for aid, desc, fn in actions:
+            cand = fn(user_raw)
+            p = _predict_from_raw(cand)
+            rows.append({"종류":"단일","아이디":aid,"설명":desc,"예측":p,"리프트":p - current_pred,"편집수":1,"적용":fn})
+
+        # ── 2개 조합(연산량 제한: 단일 리프트 상위 6개만 조합)
+        rows_sorted_single = sorted(rows, key=lambda d: d["리프트"], reverse=True)[:6]
+        from itertools import combinations
+        for (a1, a2) in combinations(rows_sorted_single, 2):
+            fn_combo = lambda df, f1=a1["적용"], f2=a2["적용"]: f2(f1(df))
+            p = _predict_from_raw(fn_combo(user_raw))
+            rows.append({
+                "종류":"조합2","아이디":f'{a1["아이디"]}+{a2["아이디"]}',
+                "설명":f'{a1["설명"]} + {a2["설명"]}',
+                "예측":p,"리프트":p - current_pred,"편집수":2,"적용":fn_combo
+            })
+
+        # 표 출력
+        import math
+        import pandas as _pd
+        df_cf = _pd.DataFrame(rows)
+        if not df_cf.empty:
+            df_view = (df_cf
+                .sort_values(["예측","리프트","편집수"], ascending=[False, False, True])
+                [["종류","설명","예측","리프트","편집수"]]
+                .head(12)
+                .reset_index(drop=True))
+            st.dataframe(df_view.style.format({"예측":"{:.3f}","리프트":"{:+.3f}"}), use_container_width=True)
+
+        # 목표 점수 도달 추천
+        target = st.number_input("목표 점수", min_value=0.0, max_value=10.0, value=min(8.2, max(7.0, round(current_pred+0.2,2))), step=0.05)
+        rec = None
+        if not df_cf.empty:
+            above = df_cf[df_cf["예측"] >= float(target)]
+            if not above.empty:
+                # 편집 수 최소 → 리프트 최대 순
+                rec = (above.sort_values(["편집수","예측"], ascending=[True, False]).iloc[0]).to_dict()
+            else:
+                rec = (df_cf.sort_values(["예측"], ascending=False).iloc[0]).to_dict()
+
+        if rec is not None:
+            st.success(f"추천 변경안 ▶ {rec['설명']}  |  예상 {rec['예측']:.3f}점 ({rec['리프트']:+.3f})")
+
+            # 적용 버튼: 현재 입력에 반영해서 즉시 재예측
+            if st.button("이 변경안 적용해서 다시 예측"):
+                applied_raw = rec["적용"](user_raw)
+                # 재예측 및 화면 갱신
+                new_pred = _predict_from_raw(applied_raw)
+                st.session_state["cf_user_raw"] = applied_raw
+                st.info(f"재예측 결과: {new_pred:.2f}  (기존 {current_pred:.2f} → {new_pred - current_pred:+.2f})")
+

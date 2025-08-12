@@ -181,22 +181,26 @@ def build_training_objects(
     X_colab_base = df_mlb.drop(columns=drop_cols, errors="ignore").copy()
     y_all = df_mlb["score"].copy()
 
-    # 4) OHE 카테고리 고정(훈련 데이터에서 추출)
+    # 4) OHE 카테고리 고정(훈련 데이터에서 추출) + Dense 보장 + 카테고리 순서 고정
     cat_cols = [c for c in CAT_CANDIDATES if c in X_colab_base.columns]
-    ohe_categories = _collect_ohe_categories(X_colab_base, cat_cols)
-
+    raw_cats = _collect_ohe_categories(X_colab_base, cat_cols)  # 보통 dict 또는 list-like
+    
+    # dict -> list-of-lists 변환 + 사전식 정렬로 순서 고정
+    if isinstance(raw_cats, dict):
+        ohe_categories = [sorted([str(v) for v in raw_cats[c]]) for c in cat_cols]
+    else:
+        # 이미 list-of-lists라면 정렬만 한 번 더 보장
+        ohe_categories = [sorted([str(v) for v in arr]) for arr in raw_cats]
+    
+    # sklearn 1.2+ / 1.1- 호환: Dense OHE 강제
+    ohe_common = dict(categories=ohe_categories, handle_unknown="ignore", drop="first")
+    try:
+        ohe = OneHotEncoder(sparse_output=False, **ohe_common)  # >=1.2
+    except TypeError:
+        ohe = OneHotEncoder(sparse=False, **ohe_common)         # <=1.1
+    
     preprocessor = ColumnTransformer(
-        transformers=[
-            (
-                "cat",
-                OneHotEncoder(
-                    categories=ohe_categories,  # ★ 고정
-                    handle_unknown="ignore",
-                    drop="first"  # 기존 앱과 동일(노트북과 다르면 여기 조정)
-                ),
-                cat_cols
-            )
-        ],
+        transformers=[("cat", ohe, cat_cols)],
         remainder="passthrough"
     )
 

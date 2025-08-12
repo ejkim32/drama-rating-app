@@ -93,7 +93,7 @@ def _inject_global_css():
       .chem-topbar{
         position:sticky; top:0; z-index:9;
         background:#f7fafc; border-bottom:1px solid #EAECF0;
-        padding:10px 14px; margin:-1rem -1rem 1rem -1rem;
+        padding:10px 14px; margin:0 -1rem 1rem -1rem;
       }
       .chem-toprow{display:flex; align-items:center; gap:12px; justify-content:space-between;}
       .chem-brand{display:flex; align-items:center; gap:8px; font-weight:800; font-size:18px;}
@@ -449,11 +449,12 @@ with st.sidebar:
 # 페이지 함수들
 # ==============================
 def page_overview():
+    topbar("케미스코어 · 대시보드", "HOME ▸ DASHBOARD")
 
     # --- KPI 4장 ---
     st.markdown('<div class="chem-row">', unsafe_allow_html=True)
     with st.container():
-        col1, col2, col3, col4 = st.columns([2,2,2,2], gap="small")
+        col1, col2, col3, col4 = st.columns([3,3,3,3], gap="small")
         with col1: kpi_card("TOTAL TRAFFIC", f"{raw_df.shape[0]:,}", "+5.4% since last month", True)
         with col2: kpi_card("NEW USERS", "3,006", "-4.5% since last month", False)
         # 평균 score (소수 2)

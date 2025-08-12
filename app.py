@@ -454,48 +454,48 @@ with tabs[2]:
     )
 
     # --- 장르별 작품 수 및 평균 점수 (FIX) ---
-st.subheader("장르별 작품 수 및 평균 점수")
-
-dfg = raw_df.copy()
-dfg['genres'] = dfg['genres'].apply(clean_cell_colab)
-dfg = dfg.explode('genres').dropna(subset=['genres','score'])
-
-g_score = dfg.groupby('genres')['score'].mean().round(3)
-g_count = dfg['genres'].value_counts()
-
-# 인덱스->열 변환 후, 이름 컬럼을 '장르'로 통일
-gdf = pd.DataFrame({'평균 점수': g_score, '작품 수': g_count}).reset_index()
-name_col = 'index' if 'index' in gdf.columns else ('genres' if 'genres' in gdf.columns else gdf.columns[0])
-gdf = gdf.rename(columns={name_col: '장르'})
-
-gdf = gdf.sort_values('작품 수', ascending=False).reset_index(drop=True)
-
-fig, ax1 = plt.subplots(figsize=(12,6))
-bars = ax1.bar(range(len(gdf)), gdf['작품 수'], color='lightgray')
-ax1.set_ylabel('작품 수')
-ax1.set_xticks(range(len(gdf)))
-ax1.set_xticklabels(gdf['장르'], rotation=45, ha='right')
-
-for i, r in enumerate(bars):
-    h = r.get_height()
-    ax1.text(i, h+max(2, h*0.01), f'{int(h)}', ha='center', va='bottom',
-             fontsize=10, fontweight='bold', color='#444')
-
-ax2 = ax1.twinx()
-ax2.plot(range(len(gdf)), gdf['평균 점수'], marker='o', linewidth=2, color='tab:blue')
-ax2.set_ylabel('평균 점수', color='tab:blue')
-ax2.tick_params(axis='y', colors='tab:blue')
-ax2.set_ylim(gdf['평균 점수'].min()-0.1, gdf['평균 점수'].max()+0.1)
-
-for i, v in enumerate(gdf['평균 점수']):
-    ax2.text(i, v+0.01, f'{v:.3f}', ha='center', va='bottom',
-             fontsize=10, fontweight='bold', color='tab:blue')
-
-plt.title('장르별 작품 수 및 평균 점수')
-ax1.set_xlabel('장르')
-ax1.grid(axis='y', linestyle='--', alpha=0.5)
-plt.tight_layout()
-st.pyplot(fig)
+    st.subheader("장르별 작품 수 및 평균 점수")
+    
+    dfg = raw_df.copy()
+    dfg['genres'] = dfg['genres'].apply(clean_cell_colab)
+    dfg = dfg.explode('genres').dropna(subset=['genres','score'])
+    
+    g_score = dfg.groupby('genres')['score'].mean().round(3)
+    g_count = dfg['genres'].value_counts()
+    
+    # 인덱스->열 변환 후, 이름 컬럼을 '장르'로 통일
+    gdf = pd.DataFrame({'평균 점수': g_score, '작품 수': g_count}).reset_index()
+    name_col = 'index' if 'index' in gdf.columns else ('genres' if 'genres' in gdf.columns else gdf.columns[0])
+    gdf = gdf.rename(columns={name_col: '장르'})
+    
+    gdf = gdf.sort_values('작품 수', ascending=False).reset_index(drop=True)
+    
+    fig, ax1 = plt.subplots(figsize=(12,6))
+    bars = ax1.bar(range(len(gdf)), gdf['작품 수'], color='lightgray')
+    ax1.set_ylabel('작품 수')
+    ax1.set_xticks(range(len(gdf)))
+    ax1.set_xticklabels(gdf['장르'], rotation=45, ha='right')
+    
+    for i, r in enumerate(bars):
+        h = r.get_height()
+        ax1.text(i, h+max(2, h*0.01), f'{int(h)}', ha='center', va='bottom',
+                 fontsize=10, fontweight='bold', color='#444')
+    
+    ax2 = ax1.twinx()
+    ax2.plot(range(len(gdf)), gdf['평균 점수'], marker='o', linewidth=2, color='tab:blue')
+    ax2.set_ylabel('평균 점수', color='tab:blue')
+    ax2.tick_params(axis='y', colors='tab:blue')
+    ax2.set_ylim(gdf['평균 점수'].min()-0.1, gdf['평균 점수'].max()+0.1)
+    
+    for i, v in enumerate(gdf['평균 점수']):
+        ax2.text(i, v+0.01, f'{v:.3f}', ha='center', va='bottom',
+                 fontsize=10, fontweight='bold', color='tab:blue')
+    
+    plt.title('장르별 작품 수 및 평균 점수')
+    ax1.set_xlabel('장르')
+    ax1.grid(axis='y', linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    st.pyplot(fig)
 
 
     # 요약 + 인사이트

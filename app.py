@@ -889,6 +889,9 @@ with tabs[8]:
             if c not in user_base.columns:
                 user_base[c] = 0
         user_base = user_base[X_colab_base.columns].tail(1)
+        user_base = user_base.replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    pred = model_full.predict(user_base)[0]
 
         pred = model_full.predict(user_base)[0]
         st.success(f"💡 예상 평점: {pred:.2f}")

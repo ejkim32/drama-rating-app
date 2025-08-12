@@ -138,6 +138,20 @@ def _inject_global_css():
       .col-6{grid-column:span 6;} .col-7{grid-column:span 7;} .col-12{grid-column:span 12;}
       div[data-testid="stPlotlyChart"], div.stPlot {margin-top:8px;}
 
+      .chem-kpi-card{
+        background:#fff;border:1px solid #EEF2F7;border-radius:16px;
+        box-shadow:0 4px 16px rgba(17,24,39,.04);padding:14px 16px 10px 16px;
+      }
+      .chem-kpi-title{font-size:12px;color:#6b7280;font-weight:700;margin-bottom:6px}
+      .chem-kpi-main{display:flex;align-items:baseline;gap:8px}
+      .chem-kpi-val{font-size:28px;font-weight:800;line-height:1}
+      .chem-kpi-sub{font-size:12px;color:#10b981;font-weight:700}
+      .chem-card{background:#fff;border:1px solid #EEF2F7;border-radius:16px;
+        box-shadow:0 4px 16px rgba(17,24,39,.04);padding:16px 16px 12px 16px}
+      .chem-card h4{margin:0 0 6px 0;font-size:14px;color:#6b7280;font-weight:700}
+      .chem-row{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+      .col-3{grid-column:span 3}.col-4{grid-column:span 4}.col-6{grid-column:span 6}.col-12{grid-column:span 12}
+
       /* 작은 화면에서 추가 안전장치 */
       @media (max-width: 900px){
         .block-container{padding-top:1.4rem;}
@@ -471,63 +485,140 @@ with st.sidebar:
 # 페이지 함수들
 # ==============================
 def page_overview():
-    topbar("케미스코어 · 대시보드", "HOME ▸ DASHBOARD")
+    _inject_dashboard_css()
 
-    # --- KPI 4장 ---
+    # ----- 집계에 쓸 컬럼 안전 준비 -----
+    drama_col = '드라마명' if _exists('드라마명') else None
+    actor_col = '배우명'   if _exists('배우명')   else None
+
+    # 작품 수(행이 작품-배우 단위면 드라마명 기준, 아니면 행 수)
+    if drama_col:
+        total_titles = _uniq(raw_df[drama_col])
+    else:
+        total_titles = int(len(raw_df))
+
+    # 출연 배우 수
+    total_actors = _uniq(raw_df[actor_col]) if actor_col else 0
+
+    # 평균/최고 점수
+    s = pd.to_numeric(raw_df['score'], errors='coerce')
+    avg_score = float(s.mean())
+    max_score = float(s.max())
+    # 최고 평점 작품(드라마 평균 기준)
+    top_title_txt = "-"
+    if drama_col:
+        top_by_title = (raw_df.assign(score=s)
+                        .dropna(subset=['score'])
+                        .groupby(drama_col)['score'].mean().sort_values(ascending=False))
+        if not top_by_title.empty:
+            top_title_txt = f"{top_by_title.index[0]} ({top_by_title.iloc[0]:.2f})"
+
+    # ----- 상단 KPI -----
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown('<div class="chem-kpi-card">', unsafe_allow_html=True)
+        st.markdown('<div class="chem-kpi-title">TOTAL TITLES</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="chem-kpi-main"><div class="chem-kpi-val">{total_titles:,}</div>'
+                    f'<div class="chem-kpi-sub">전체 작품</div></div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown('<div class="chem-kpi-card">', unsafe_allow_html=True)
+        st.markdown('<div class="chem-kpi-title">TOTAL ACTORS</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="chem-kpi-main"><div class="chem-kpi-val">{total_actors:,}</div>'
+                    f'<div class="chem-kpi-sub">명</div></div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    with c3:
+        st.markdown('<div class="chem-kpi-card">', unsafe_allow_html=True)
+        st.markdown('<div class="chem-kpi-title">AVG CHEMI SCORE</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="chem-kpi-main"><div class="chem-kpi-val">{avg_score:.2f}</div>'
+                    f'<div class="chem-kpi-sub">전체 평균</div></div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    with c4:
+        st.markdown('<div class="chem-kpi-card">', unsafe_allow_html=True)
+        st.markdown('<div class="chem-kpi-title">TOP TITLE (AVG)</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="chem-kpi-main"><div class="chem-kpi-val">{max_score:.2f}</div>'
+                    f'<div class="chem-kpi-sub">{top_title_txt}</div></div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.write("")  # 작은 여백
+
+    # ----- 메인 차트 2개 (좌: 연도 추이, 우: 장르별 평균) -----
     st.markdown('<div class="chem-row">', unsafe_allow_html=True)
-    with st.container():
-        col1, col2, col3, col4 = st.columns([3,3,3,3], gap="small")
-        with col1: kpi_card("TOTAL TRAFFIC", f"{raw_df.shape[0]:,}", "+5.4% since last month", True)
-        with col2: kpi_card("NEW USERS", "3,006", "-4.5% since last month", False)
-        # 평균 score (소수 2)
-        avg_score = float(pd.to_numeric(raw_df['score'], errors='coerce').mean())
-        with col3: kpi_card("PERFORMANCE", f"{avg_score*10:.0f}%", "+2.5% since last month", True)
-        with col4:
-            unique_titles = raw_df.get('드라마명') if '드라마명' in raw_df.columns else raw_df.get('title')
-            n_titles = int(unique_titles.nunique()) if unique_titles is not None else raw_df.shape[0]
-            kpi_card("SALES", f"{n_titles:,}", "+3.8% since last month", True)
 
-    # --- 좌: 라인, 우: 바(토탈 오더) ---
-    st.markdown('<div class="chem-row" style="margin-top:12px;">', unsafe_allow_html=True)
-    left, right = st.columns([7,5], gap="small")
+    # (좌) 연도별 평균 점수 추이
+    st.markdown('<div class="chem-card col-6">', unsafe_allow_html=True)
+    st.markdown("<h4>PERCENTAGE (연도별 평균 케미스코어)</h4>", unsafe_allow_html=True)
+    df_year = raw_df.copy()
+    df_year['start airing'] = pd.to_numeric(df_year['start airing'], errors='coerce')
+    df_year['score'] = pd.to_numeric(df_year['score'], errors='coerce')
+    df_year = df_year.dropna(subset=['start airing','score']).copy()
+    if not df_year.empty:
+        year_mean = (df_year.groupby('start airing')['score'].mean()
+                             .reset_index().sort_values('start airing'))
+        fig1 = px.line(year_mean, x='start airing', y='score', markers=True)
+        fig1.update_layout(margin=dict(l=8,r=8,t=8,b=8), height=360)
+        st.plotly_chart(fig1, use_container_width=True)
+    else:
+        st.info("연도/점수 데이터가 부족합니다.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    with left:
-        with card("PERCENTAGE"):
-            # 간단 라인: 연도별 count
-            d = raw_df.copy()
-            d['start airing'] = pd.to_numeric(d['start airing'], errors='coerce')
-            d = d.dropna(subset=['start airing'])
-            ct = d['start airing'].value_counts().sort_index()
-            fig, ax = plt.subplots(figsize=(6.5,3.2))
-            ax.plot(ct.index, ct.values, marker='o')
-            ax.set_ylabel('%'); ax.set_xlabel(''); ax.grid(alpha=.25, linestyle='--')
-            st.pyplot(fig, use_container_width=True)
+    # (우) 장르별 평균 점수
+    st.markdown('<div class="chem-card col-6">', unsafe_allow_html=True)
+    st.markdown("<h4>TOTAL ORDERS (장르별 평균 케미스코어)</h4>", unsafe_allow_html=True)
+    dfg = raw_df.copy()
+    dfg['genres'] = dfg['genres'].apply(clean_cell_colab)
+    dfg = dfg.explode('genres').dropna(subset=['genres','score'])
+    if not dfg.empty:
+        gdf = (dfg.groupby('genres')['score'].mean()
+                  .sort_values(ascending=False).reset_index())
+        fig2 = px.bar(gdf.head(15), x='genres', y='score')
+        fig2.update_layout(margin=dict(l=8,r=8,t=8,b=8), height=360)
+        st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("장르/점수 데이터가 부족합니다.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    with right:
-        with card("TOTAL ORDERS"):
-            d = raw_df.copy()
-            d['start airing'] = pd.to_numeric(d['start airing'], errors='coerce')
-            d = d.dropna(subset=['start airing'])
-            ct = d['start airing'].value_counts().sort_index()
-            fig, ax = plt.subplots(figsize=(6.5,3.2))
-            ax.bar(ct.index, ct.values)
-            ax.set_xlabel(''); ax.set_ylabel('count'); ax.grid(axis='y', alpha=.2, linestyle='--')
-            st.pyplot(fig, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- 좌측 작은 카드 2개 (Health care / Weather updates처럼) ---
-    st.markdown('<div class="chem-row" style="margin-top:12px;">', unsafe_allow_html=True)
-    colA, colB = st.columns([3,3], gap="small")
-    with colA:
-        with card("HEALTH CARE"):
-            st.write("❤️ 최근 작품 평점 상위 3")
-            top3 = (pd.to_numeric(raw_df['score'], errors='coerce')
-                    .nlargest(3).reset_index(drop=True))
-            for i, v in enumerate(top3, 1):
-                st.write(f"- Top {i}: **{v:.2f}**")
-    with colB:
-        with card("WEATHER UPDATES"):
-            st.write("🌿 장르 수(유니크): ", len(unique_genres))
+    # ----- 하단 보조 지표 2개 (좌: Top3 최근 작품, 우: 플랫폼 평균) -----
+    st.markdown('<div class="chem-row">', unsafe_allow_html=True)
 
+    # (좌) 최근 케미스코어 Top 3 작품
+    st.markdown('<div class="chem-card col-6">', unsafe_allow_html=True)
+    st.markdown("<h4>최근 작품 평점 상위 3</h4>", unsafe_allow_html=True)
+    if drama_col:
+        recent_top = (raw_df.assign(score=s,
+                                    year=pd.to_numeric(raw_df['start airing'], errors='coerce'))
+                      .dropna(subset=['score','year'])
+                      .groupby([drama_col,'year'])['score'].mean().reset_index()
+                      .sort_values(['year','score'], ascending=[False,False])
+                      .head(3))
+        if not recent_top.empty:
+            for _, r in recent_top.iterrows():
+                st.markdown(f"- **{r[drama_col]}** · {int(r['year'])} · {r['score']:.2f}")
+        else:
+            st.caption("표시할 최근 상위 작품이 없습니다.")
+    else:
+        st.caption("드라마명 컬럼이 없어 목록을 만들 수 없습니다.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # (우) 플랫폼별 평균 케미스코어
+    st.markdown('<div class="chem-card col-6">', unsafe_allow_html=True)
+    st.markdown("<h4>플랫폼별 평균 케미스코어</h4>", unsafe_allow_html=True)
+    dfn = raw_df.copy()
+    dfn['network'] = dfn['network'].apply(clean_cell_colab)
+    dfn = dfn.explode('network').dropna(subset=['network','score'])
+    if not dfn.empty:
+        plat = (dfn.groupby('network')['score'].mean()
+                  .sort_values(ascending=False).reset_index().head(12))
+        fig3 = px.bar(plat, x='network', y='score')
+        fig3.update_layout(margin=dict(l=8,r=8,t=8,b=8), height=300)
+        st.plotly_chart(fig3, use_container_width=True)
+    else:
+        st.caption("플랫폼/점수 데이터가 없습니다.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
 def page_basic_stats():
     st.header("기초 통계: score")
     st.write(pd.to_numeric(raw_df['score'], errors='coerce').describe())

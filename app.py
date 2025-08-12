@@ -816,6 +816,7 @@ with tabs[5]:
 with tabs[6]:
     st.header("GridSearchCV 튜닝")
 
+    # split 보장
     if "split_colab" not in st.session_state or st.session_state.get("split_key") != float(test_size):
         X_train, X_test, y_train, y_test = train_test_split(
             X_colab_base, y_all, test_size=test_size, random_state=SEED, shuffle=True
@@ -827,32 +828,21 @@ with tabs[6]:
     scoring = st.selectbox("스코어링", ["neg_root_mean_squared_error", "r2"], index=0)
     cv = st.number_input("CV 폴드 수", 3, 10, 5, 1)
 
-        # ---- (추가) 공용: 파라미터 셀렉터 유틸 ----
+    # ---- 파라미터 셀렉터 유틸 ----
     def render_param_selector(label, options):
-        """
-        options(list)를 UI에 표시해서 멀티 선택 + 커스텀 값 입력을 받아 리스트로 반환.
-        - None은 '(None)'로 표시했다가 다시 None으로 복원
-        - 커스텀 값은 콤마로 구분. int → float → str 순으로 파싱
-        """
-        # UI 표시 문자열 매핑
         display_options, to_py = [], {}
         for v in options:
             if v is None:
-                s = "(None)"
-                to_py[s] = None
+                s = "(None)"; to_py[s] = None
             else:
                 s = str(int(v)) if isinstance(v, float) and v.is_integer() else str(v)
                 to_py[s] = v
             display_options.append(s)
-    
-        # 기본값은 제공 리스트 전체 선택
+
         sel = st.multiselect(f"{label}", display_options, default=display_options, key=f"sel_{label}")
-        extra = st.text_input(f"{label} 추가값(콤마로 입력, 예: 50,75,100 또는 None)", value="", key=f"extra_{label}")
-    
-        # 선택값 복원
+        extra = st.text_input(f"{label} 추가값(콤마, 예: 50,75,100 또는 None)", value="", key=f"extra_{label}")
+
         chosen = [to_py[s] for s in sel]
-    
-        # 추가값 파싱
         if extra.strip():
             for tok in extra.split(","):
                 t = tok.strip()
@@ -867,16 +857,16 @@ with tabs[6]:
                         try:
                             val = float(t)
                         except:
-                            val = t  # 문자열로 그대로 사용 (예: 'rbf', 'poly' 등)
+                            val = t
                 chosen.append(val)
-    
-        # 중복 제거(순서 유지)
+
         uniq = []
         for v in chosen:
             if v not in uniq:
                 uniq.append(v)
         return uniq
-        
+
+    # ---- 모델 풀 ----
     model_zoo = {
         "KNN": ("nonsparse", KNeighborsRegressor()),
         "Linear Regression (Poly)": ("nonsparse", LinearRegression()),
@@ -894,6 +884,7 @@ with tabs[6]:
             n_jobs=-1, tree_method="hist"
         ))
 
+    # ---- 파이프라인 빌더 ----
     def make_pipeline(kind, estimator):
         if kind == "tree":
             return Pipeline([('preprocessor', preprocessor), ('model', estimator)])
@@ -905,6 +896,7 @@ with tabs[6]:
                 ('model', estimator)
             ])
 
+    # ---- 기본 그리드(디폴트 셋) ----
     default_param_grids = {
         "KNN": {"poly__degree":[1,2,3], "model__n_neighbors":[3,4,5,6,7,8,9,10]},
         "Linear Regression (Poly)": {"poly__degree":[1,2,3]},
@@ -917,7 +909,7 @@ with tabs[6]:
         "Random Forest": {"model__n_estimators":[100,200,300], "model__min_samples_split":[5,6,7,8,9,10], "model__max_depth":[5,10,15,20,25,30]},
     }
     if "XGBRegressor" in model_zoo:
-        param_grids["XGBRegressor"] = {
+        default_param_grids["XGBRegressor"] = {
             "model__n_estimators":[200,400],
             "model__max_depth":[3,5,7],
             "model__learning_rate":[0.03,0.1,0.3],
@@ -925,53 +917,18 @@ with tabs[6]:
             "model__colsample_bytree":[0.8,1.0],
         }
 
+    # ---- 모델 선택 ----
     model_name = st.selectbox("튜닝할 모델 선택", list(model_zoo.keys()), index=0)
     kind, estimator = model_zoo[model_name]
     pipe = make_pipeline(kind, estimator)
-    grid = param_grids[model_name]
 
-    # ---- 동적 파라미터 UI: 선택한 모델의 그리드를 기반으로 위젯 생성 ----
+    # ---- 동적 파라미터 UI (기본 → 사용자 선택) ----
     st.markdown("**하이퍼파라미터 선택**")
     base_grid = default_param_grids.get(model_name, {})
     user_grid = {}
     for param_key, default_vals in base_grid.items():
-        user_vals = render_param_selector(param_key, default_vals)
-        # 사용자가 하나도 안 고르면 기본 리스트를 그대로 사용
-        user_grid[param_key] = user_vals if len(user_vals) > 0 else default_vals
-    
-    # 선택 요약 보여주기
-    with st.expander("선택한 파라미터 확인"):
-        st.write(user_grid)
+        user_vals = render_param_selector(param_key, def
 
-    if st.button("GridSearch 실행"):
-        gs = GridSearchCV(pipe, grid, cv=int(cv), scoring=scoring, n_jobs=-1, refit=True, return_train_score=True)
-        with st.spinner("GridSearchCV 실행 중..."):
-            gs.fit(X_train, y_train)
-
-        st.subheader("베스트 결과")
-        st.json(gs.best_params_)
-        if scoring == "neg_root_mean_squared_error":
-            st.write(f"Best CV RMSE: {-gs.best_score_:.6f}")
-        else:
-            st.write(f"Best CV {scoring}: {gs.best_score_:.6f}")
-
-        y_pred = gs.predict(X_test)
-        st.write(f"Test RMSE: {rmse(y_test, y_pred):.6f}")
-        st.write(f"Test R²  : {r2_score(y_test, y_pred):.6f}")
-
-        st.session_state["best_estimator"] = gs.best_estimator_
-        st.session_state["best_params"] = gs.best_params_
-        st.session_state["best_name"] = model_name
-        st.session_state["best_cv_score"] = gs.best_score_
-        st.session_state["best_scoring"] = scoring
-        st.session_state["best_split_key"] = st.session_state.get("split_key")
-
-        cvres = pd.DataFrame(gs.cv_results_)
-        cols = ["rank_test_score","mean_test_score","std_test_score","mean_train_score","std_train_score","params"]
-        st.dataframe(cvres[cols].sort_values("rank_test_score").reset_index(drop=True))
-
-    if model_name == "XGBRegressor" and not XGB_AVAILABLE:
-        st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
 
 # --- 4.8 머신러닝 모델링 ---
 with tabs[7]:

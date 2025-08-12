@@ -753,25 +753,27 @@ current = st.session_state["nav"]
 with st.sidebar:
     st.markdown('<div class="sb-wrap">', unsafe_allow_html=True)
     st.markdown("""
-<style>
-.sb-brand {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 900;
-}
-.sb-brand .logo {
-    font-size: 55px;  /* 이모티콘 크기 */
-}
-.sb-brand .name {
-    font-size: 50px;  /* 글자 크기 */
-}
-</style>
-<div class="sb-brand">
-    <span class="logo">🎬</span>
-    <span class="name">케미스코어</span>
-</div>
-""", unsafe_allow_html=True)
+    <style>
+    section[data-testid="stSidebar"] .sb-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 900;
+    }
+    section[data-testid="stSidebar"] .sb-brand .logo {
+        font-size: 40px !important;  /* 이모티콘 크기 */
+        line-height: 1;
+    }
+    section[data-testid="stSidebar"] .sb-brand .name {
+        font-size: 28px !important;  /* 글자 크기 */
+        line-height: 1.2;
+    }
+    </style>
+    <div class="sb-brand">
+        <span class="logo">🎬</span>
+        <span class="name">케미스코어</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     # Navigation
     st.markdown('<div class="sb-menu">', unsafe_allow_html=True)

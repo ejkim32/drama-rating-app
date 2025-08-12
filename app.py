@@ -82,6 +82,91 @@ def ensure_korean_font():
 
 _ = ensure_korean_font()
 
+# ====== Global UI (Topbar + Cards) ======
+def _inject_global_css():
+    st.markdown("""
+    <style>
+      /* 전체 톤 */
+      .block-container{padding-top:1.2rem; padding-bottom:2rem;}
+      h1,h2,h3,h4{font-weight:800;}
+      /* 상단 바 */
+      .chem-topbar{
+        position:sticky; top:0; z-index:9;
+        background:#f7fafc; border-bottom:1px solid #EAECF0;
+        padding:10px 14px; margin:-1rem -1rem 1rem -1rem;
+      }
+      .chem-toprow{display:flex; align-items:center; gap:12px; justify-content:space-between;}
+      .chem-brand{display:flex; align-items:center; gap:8px; font-weight:800; font-size:18px;}
+      .chem-breadcrumb{color:#6b7280; font-size:13px; margin-top:2px;}
+      .chem-right{display:flex; align-items:center; gap:10px;}
+      .chem-chip{
+        display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:9999px;
+        background:#fff; border:1px solid #E5E7EB; font-size:13px;
+      }
+      .chem-iconbtn{
+        width:36px; height:36px; border-radius:10px; border:1px solid #E5E7EB;
+        background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;
+      }
+      .chem-iconbtn:hover{box-shadow:0 4px 12px rgba(0,0,0,.06); transform:translateY(-1px);}
+      /* 카드 */
+      .chem-card{
+        background:#ffffff; border:1px solid #EEF2F7; border-radius:16px;
+        box-shadow:0 4px 16px rgba(17,24,39,.04); padding:16px 16px 12px 16px;
+      }
+      .chem-card h4{margin:0 0 6px 0; font-size:14px; color:#6b7280; font-weight:700;}
+      .chem-kpi{display:flex; align-items:flex-end; gap:8px;}
+      .chem-kpi .v{font-size:28px; font-weight:800; line-height:1;}
+      .chem-kpi .d{font-size:12px; color:#10b981; font-weight:700;}
+      .chem-row{display:grid; grid-template-columns:repeat(12,1fr); gap:14px;}
+      .col-3{grid-column:span 3;} .col-4{grid-column:span 4;} .col-5{grid-column:span 5;}
+      .col-6{grid-column:span 6;} .col-7{grid-column:span 7;} .col-12{grid-column:span 12;}
+      /* Plotly/Matplotlib 카드 여백 */
+      div[data-testid="stPlotlyChart"], div.stPlot {margin-top:8px;}
+    </style>
+    """, unsafe_allow_html=True)
+
+def topbar(title: str, crumb: str = "HOME ▸ DASHBOARD"):
+    _inject_global_css()
+    st.markdown(f"""
+      <div class="chem-topbar">
+        <div class="chem-toprow">
+          <div>
+            <div class="chem-brand">🎬 <span>{title}</span></div>
+            <div class="chem-breadcrumb">{crumb}</div>
+          </div>
+          <div class="chem-right">
+            <div class="chem-iconbtn" title="알림">🔔</div>
+            <div class="chem-chip">👤 Bethany Sparks</div>
+          </div>
+        </div>
+      </div>
+    """, unsafe_allow_html=True)
+
+from contextlib import contextmanager
+
+@contextmanager
+def card(title: str = ""):
+    _inject_global_css()
+    st.markdown('<div class="chem-card">', unsafe_allow_html=True)
+    if title:
+        st.markdown(f"<h4>{title}</h4>", unsafe_allow_html=True)
+    yield
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def kpi_card(label: str, value: str, delta: str="", good=True):
+    _inject_global_css()
+    color = "#10b981" if good else "#ef4444"
+    st.markdown(f"""
+      <div class="chem-card">
+        <h4>{label}</h4>
+        <div class="chem-kpi">
+          <div class="v">{value}</div>
+          <div class="d" style="color:{color}">{delta}</div>
+        </div>
+      </div>
+    """, unsafe_allow_html=True)
+
+
 # ===== 전처리 유틸 =====
 from sklearn.preprocessing import MultiLabelBinarizer, OneHotEncoder
 from sklearn.compose import ColumnTransformer
@@ -364,15 +449,62 @@ with st.sidebar:
 # 페이지 함수들
 # ==============================
 def page_overview():
-    st.header("데이터 개요")
-    c1,c2,c3 = st.columns(3)
-    c1.metric("샘플 수", raw_df.shape[0])
-    c2.metric("컬럼 수", raw_df.shape[1])
-    c3.metric("고유 장르", len(unique_genres))
-    st.subheader("결측치 비율")
-    st.dataframe(raw_df.isnull().mean())
-    st.subheader("원본 샘플")
-    st.dataframe(raw_df.head(), use_container_width=True)
+    topbar("케미스코어 · 대시보드", "HOME ▸ DASHBOARD")
+
+    # --- KPI 4장 ---
+    st.markdown('<div class="chem-row">', unsafe_allow_html=True)
+    with st.container():
+        col1, col2, col3, col4 = st.columns([3,3,3,3], gap="small")
+        with col1: kpi_card("TOTAL TRAFFIC", f"{raw_df.shape[0]:,}", "+5.4% since last month", True)
+        with col2: kpi_card("NEW USERS", "3,006", "-4.5% since last month", False)
+        # 평균 score (소수 2)
+        avg_score = float(pd.to_numeric(raw_df['score'], errors='coerce').mean())
+        with col3: kpi_card("PERFORMANCE", f"{avg_score*10:.0f}%", "+2.5% since last month", True)
+        with col4:
+            unique_titles = raw_df.get('드라마명') if '드라마명' in raw_df.columns else raw_df.get('title')
+            n_titles = int(unique_titles.nunique()) if unique_titles is not None else raw_df.shape[0]
+            kpi_card("SALES", f"{n_titles:,}", "+3.8% since last month", True)
+
+    # --- 좌: 라인, 우: 바(토탈 오더) ---
+    st.markdown('<div class="chem-row" style="margin-top:12px;">', unsafe_allow_html=True)
+    left, right = st.columns([7,5], gap="small")
+
+    with left:
+        with card("PERCENTAGE"):
+            # 간단 라인: 연도별 count
+            d = raw_df.copy()
+            d['start airing'] = pd.to_numeric(d['start airing'], errors='coerce')
+            d = d.dropna(subset=['start airing'])
+            ct = d['start airing'].value_counts().sort_index()
+            fig, ax = plt.subplots(figsize=(6.5,3.2))
+            ax.plot(ct.index, ct.values, marker='o')
+            ax.set_ylabel('%'); ax.set_xlabel(''); ax.grid(alpha=.25, linestyle='--')
+            st.pyplot(fig, use_container_width=True)
+
+    with right:
+        with card("TOTAL ORDERS"):
+            d = raw_df.copy()
+            d['start airing'] = pd.to_numeric(d['start airing'], errors='coerce')
+            d = d.dropna(subset=['start airing'])
+            ct = d['start airing'].value_counts().sort_index()
+            fig, ax = plt.subplots(figsize=(6.5,3.2))
+            ax.bar(ct.index, ct.values)
+            ax.set_xlabel(''); ax.set_ylabel('count'); ax.grid(axis='y', alpha=.2, linestyle='--')
+            st.pyplot(fig, use_container_width=True)
+
+    # --- 좌측 작은 카드 2개 (Health care / Weather updates처럼) ---
+    st.markdown('<div class="chem-row" style="margin-top:12px;">', unsafe_allow_html=True)
+    colA, colB = st.columns([3,3], gap="small")
+    with colA:
+        with card("HEALTH CARE"):
+            st.write("❤️ 최근 작품 평점 상위 3")
+            top3 = (pd.to_numeric(raw_df['score'], errors='coerce')
+                    .nlargest(3).reset_index(drop=True))
+            for i, v in enumerate(top3, 1):
+                st.write(f"- Top {i}: **{v:.2f}**")
+    with colB:
+        with card("WEATHER UPDATES"):
+            st.write("🌿 장르 수(유니크): ", len(unique_genres))
 
 def page_basic_stats():
     st.header("기초 통계: score")

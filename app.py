@@ -16,6 +16,7 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.base import clone
 import re
+from sklearn.model_selection import KFold
 
 # XGB가 설치돼 있으면 쓰도록 안전하게 추가
 try:
@@ -222,6 +223,8 @@ def load_data():
         raw = pd.DataFrame({c: pd.Series(v) for c, v in raw.to_dict().items()})
     else:
         raw = pd.DataFrame({c: pd.Series(v) for c, v in raw.to_dict().items()})
+    # ✅ CV 재현성을 위해 행 순서 고정
+    raw = raw.reset_index(drop=True)
     return raw
 
 raw_df = load_data()
@@ -353,76 +356,83 @@ with tabs[2]:
 
     # --- 장르 '개수'별 배우 평균 평점 (1~2 / 3~4 / 5~6 / 7+) ---
     st.subheader("장르 개수별 평균 평점 (배우 단위, 1 ~ 2 / 3 ~ 4 / 5 ~ 6 / 7+)")
-    gdf = (
-        pd.DataFrame({'배우명': raw_df['배우명'], 'genres': raw_df['genres'].apply(clean_cell_colab)})
-        .explode('genres').dropna(subset=['배우명','genres'])
-    )
-    genre_cnt = gdf.groupby('배우명')['genres'].nunique().rename('장르개수')
-    actor_mean = (raw_df.groupby('배우명', as_index=False)['score'].mean().rename(columns={'score':'배우평균점수'}))
-    df_actor = actor_mean.merge(genre_cnt.reset_index(), on='배우명', how='left')
-    df_actor['장르개수'] = df_actor['장르개수'].fillna(0).astype(int)
-    df_actor = df_actor[df_actor['장르개수'] > 0].copy()
 
-    def bucket(n: int) -> str:
-        if n <= 2:  return '1~2개'
-        if n <= 4:  return '3~4개'
-        if n <= 6:  return '5~6개'
-        return '7개 이상'
-
-    df_actor['장르개수구간'] = pd.Categorical(df_actor['장르개수'].apply(bucket),
-                                         categories=['1~2개','3~4개','5~6개','7개 이상'], ordered=True)
-
-    fig_box = px.box(
-        df_actor, x='장르개수구간', y='배우평균점수',
-        category_orders={'장르개수구간': ['1~2개','3~4개','5~6개','7개 이상']},
-        title="장르 개수별 배우 평균 점수 분포 (1 ~ 2 / 3 ~ 4 / 5 ~ 6 / 7+)"
-    )
-    st.plotly_chart(fig_box, use_container_width=True)
-
-    stats = (df_actor.groupby('장르개수구간')['배우평균점수']
-             .agg(평균='mean', 중앙값='median', 표본수='count')
-             .reindex(['1~2개','3~4개','5~6개','7개 이상']).dropna(how='all').round(3))
-
-    if not stats.empty and stats['표본수'].sum() > 0:
-        best_mean_grp   = stats['평균'].idxmax()
-        best_median_grp = stats['중앙값'].idxmax()
-        vals = stats['평균'].dropna().values
-        diffs = pd.Series(vals).diff().dropna()
-        if (diffs >= 0).all():
-            trend = "장르 수가 많을수록 평균 평점이 **높아지는 경향**"
-        elif (diffs <= 0).all():
-            trend = "장르 수가 많을수록 평균 평점이 **낮아지는 경향**"
-        else:
-            trend = "장르 수와 평균 평점 간 **일관된 단조 경향은 약함**"
-
-        comp_txt = ""
-        if {'1~2개','7개 이상'}.issubset(stats.index):
-            diff_mean = stats.loc['1~2개','평균'] - stats.loc['7개 이상','평균']
-            diff_med  = stats.loc['1~2개','중앙값'] - stats.loc['7개 이상','중앙값']
-            sign = "높음" if diff_mean >= 0 else "낮음"
-            comp_txt = f"- **1~2개 vs 7개 이상**: 평균 {abs(diff_mean):.3f}p {sign}, 중앙값 차이 {abs(diff_med):.3f}p\n"
-
-        st.markdown("**요약 통계(배우 단위)**")
-        try:
-            st.markdown(stats.to_markdown())
-        except Exception:
-            st.dataframe(stats.reset_index(), use_container_width=True)
-
-        st.markdown(
-            f"""
-**인사이트**
-- 평균 기준 최고 그룹: **{best_mean_grp}** / 중앙값 기준 최고 그룹: **{best_median_grp}**  
-- {trend}  
-{comp_txt if comp_txt else ""}
-- 장르 다양성↑ → 평점↑ (단조 증가)
-평균이 7.774 → 7.802 → 7.861 → 7.911로 계단식 상승합니다.
-중앙값도 7.700 → 7.715 → 7.810 → 7.901로 동일하게 증가.
-
--> 다장르 경험이 많을수록 연기 적응력/인지도/캐스팅 파워가 높아 작품 선택 품질이 좋아졌을 가능성.
-"""
-        )
+    # ✅ 배우 식별 컬럼 폴백
+    actor_col = '배우명' if '배우명' in raw_df.columns else ('actor' if 'actor' in raw_df.columns else None)
+    if actor_col is None:
+        st.info("배우 식별 컬럼을 찾을 수 없어(배우명/actor) 이 섹션을 건너뜁니다.")
     else:
-        st.info("장르 개수 구간별 통계를 계산할 데이터가 부족합니다.")
+        gdf = (
+            pd.DataFrame({actor_col: raw_df[actor_col], 'genres': raw_df['genres'].apply(clean_cell_colab)})
+            .explode('genres').dropna(subset=[actor_col,'genres'])
+        )
+        genre_cnt = gdf.groupby(actor_col)['genres'].nunique().rename('장르개수')
+        actor_mean = (raw_df.groupby(actor_col, as_index=False)['score']
+                      .mean().rename(columns={'score':'배우평균점수'}))
+        df_actor = actor_mean.merge(genre_cnt.reset_index(), on=actor_col, how='left')
+        df_actor['장르개수'] = df_actor['장르개수'].fillna(0).astype(int)
+        df_actor = df_actor[df_actor['장르개수'] > 0].copy()
+    
+        def bucket(n: int) -> str:
+            if n <= 2:  return '1~2개'
+            if n <= 4:  return '3~4개'
+            if n <= 6:  return '5~6개'
+            return '7개 이상'
+    
+        df_actor['장르개수구간'] = pd.Categorical(
+            df_actor['장르개수'].apply(bucket),
+            categories=['1~2개','3~4개','5~6개','7개 이상'],
+            ordered=True
+        )
+    
+        fig_box = px.box(
+            df_actor, x='장르개수구간', y='배우평균점수',
+            category_orders={'장르개수구간': ['1~2개','3~4개','5~6개','7개 이상']},
+            title="장르 개수별 배우 평균 점수 분포 (1 ~ 2 / 3 ~ 4 / 5 ~ 6 / 7+)"
+        )
+        st.plotly_chart(fig_box, use_container_width=True)
+    
+        stats = (df_actor.groupby('장르개수구간')['배우평균점수']
+                 .agg(평균='mean', 중앙값='median', 표본수='count')
+                 .reindex(['1~2개','3~4개','5~6개','7개 이상']).dropna(how='all').round(3))
+    
+        if not stats.empty and stats['표본수'].sum() > 0:
+            best_mean_grp   = stats['평균'].idxmax()
+            best_median_grp = stats['중앙값'].idxmax()
+            vals = stats['평균'].dropna().values
+            diffs = pd.Series(vals).diff().dropna()
+            if (diffs >= 0).all():
+                trend = "장르 수가 많을수록 평균 평점이 **높아지는 경향**"
+            elif (diffs <= 0).all():
+                trend = "장르 수가 많을수록 평균 평점이 **낮아지는 경향**"
+            else:
+                trend = "장르 수와 평균 평점 간 **일관된 단조 경향은 약함**"
+    
+            comp_txt = ""
+            if {'1~2개','7개 이상'}.issubset(stats.index):
+                diff_mean = stats.loc['1~2개','평균'] - stats.loc['7개 이상','평균']
+                diff_med  = stats.loc['1~2개','중앙값'] - stats.loc['7개 이상','중앙값']
+                sign = "높음" if diff_mean >= 0 else "낮음"
+                comp_txt = f"- **1~2개 vs 7개 이상**: 평균 {abs(diff_mean):.3f}p {sign}, 중앙값 차이 {abs(diff_med):.3f}p\n"
+    
+            st.markdown("**요약 통계(배우 단위)**")
+            try:
+                st.markdown(stats.to_markdown())
+            except Exception:
+                st.dataframe(stats.reset_index(), use_container_width=True)
+    
+            st.markdown(
+                f"""
+    **인사이트**
+    - 평균 기준 최고 그룹: **{best_mean_grp}** / 중앙값 기준 최고 그룹: **{best_median_grp}**  
+    - {trend}  
+    {comp_txt if comp_txt else ""}
+    - 장르 다양성↑ → 평점↑ (단조 증가)  
+    -> 다장르 경험 증가가 작품 선택 품질 향상에 기여했을 가능성.
+    """
+            )
+        else:
+            st.info("장르 개수 구간별 통계를 계산할 데이터가 부족합니다.")
 
     # 주연 배우 결혼 상태별 평균 점수 비교 (role / married / score)
     st.subheader("주연 배우 결혼 상태별 평균 점수 비교")
@@ -933,12 +943,15 @@ with tabs[6]:
     with st.expander("선택한 파라미터 확인"):
         st.write(user_grid)
 
-    # ---- 실행 ----
+        # ---- 실행 ----
     if st.button("GridSearch 실행"):
+        # ✅ 재현성 고정: KFold with shuffle + seed
+        cv_obj = KFold(n_splits=int(cv), shuffle=True, random_state=SEED)
+    
         gs = GridSearchCV(
-            pipe,
-            user_grid,  # ← 사용자 선택 그리드 사용!
-            cv=int(cv),
+            estimator=pipe,
+            param_grid=user_grid,   # ✅ 사용자 선택 그리드 사용
+            cv=cv_obj,
             scoring=scoring,
             n_jobs=-1,
             refit=True,
@@ -946,30 +959,30 @@ with tabs[6]:
         )
         with st.spinner("GridSearchCV 실행 중..."):
             gs.fit(X_train, y_train)
-
+    
         st.subheader("베스트 결과")
         st.json(gs.best_params_)
         if scoring == "neg_root_mean_squared_error":
             st.write(f"Best CV RMSE: {-gs.best_score_:.6f}")
         else:
             st.write(f"Best CV {scoring}: {gs.best_score_:.6f}")
-
+    
         y_pred = gs.predict(X_test)
         st.write(f"Test RMSE: {rmse(y_test, y_pred):.6f}")
         st.write(f"Test R²  : {r2_score(y_test, y_pred):.6f}")
-
-        # 모델 재사용 저장
+    
+        # 재사용 저장
         st.session_state["best_estimator"] = gs.best_estimator_
         st.session_state["best_params"] = gs.best_params_
         st.session_state["best_name"] = model_name
         st.session_state["best_cv_score"] = gs.best_score_
         st.session_state["best_scoring"] = scoring
         st.session_state["best_split_key"] = st.session_state.get("split_key")
-
+    
         cvres = pd.DataFrame(gs.cv_results_)
         cols = ["rank_test_score","mean_test_score","std_test_score","mean_train_score","std_train_score","params"]
         st.dataframe(cvres[cols].sort_values("rank_test_score").reset_index(drop=True))
-
+    
     if model_name == "XGBRegressor" and not XGB_AVAILABLE:
         st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
 

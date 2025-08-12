@@ -287,67 +287,78 @@ NAV_ITEMS = [
     ("predict",  "🎯", "예측"),
 ]
 
-# 현재 선택(쿼리파람에서 읽기)
-qp = st.query_params
-current = qp.get("nav", NAV_ITEMS[0][0])
-# 처음 로드 시 기본값
-if "nav" not in st.session_state:
-    # 쿼리파람이 있으면 우선 적용
-    default_nav = st.query_params.get("nav", "overview")
-    if isinstance(default_nav, list):  # 안전 처리
-        default_nav = default_nav[0]
-    st.session_state["nav"] = default_nav
+# ----------------------------
+# 쿼리파람 안전 읽기 유틸 (버전 호환)
+# ----------------------------
+def _get_nav_from_query():
+    if hasattr(st, "query_params"):  # Streamlit 1.30+
+        qp = st.query_params
+        val = qp.get("nav", None)
+        if isinstance(val, list):
+            val = val[0] if val else None
+        return val
+    else:
+        qp = st.experimental_get_query_params()
+        val = qp.get("nav", [None])
+        return val[0] if isinstance(val, list) else val
 
+def _set_nav_query(slug: str):
+    if hasattr(st, "query_params"):   # Streamlit 1.30+
+        st.query_params["nav"] = slug
+    else:
+        st.experimental_set_query_params(nav=slug)
+
+# ----------------------------
+# 현재 nav 결정 (초기 1회)
+# ----------------------------
+if "nav" not in st.session_state:
+    st.session_state["nav"] = _get_nav_from_query() or NAV_ITEMS[0][0]
+current = st.session_state["nav"]
+
+# ================== 사이드바 UI ==================
 with st.sidebar:
-    # 스타일(좁은 사이드바 + 아이콘형 버튼)
     st.markdown("""
     <style>
       section[data-testid="stSidebar"]{
         width:80px !important; min-width:80px; background:#202331;
       }
+      .chem-stack{display:flex; flex-direction:column; align-items:center; gap:14px; padding:12px 0 24px;}
       .chem-btn .stButton>button{
         width:46px; height:46px; font-size:26px; line-height:1;
         border-radius:14px; border:1px solid rgba(255,255,255,.15);
-        background:transparent; color:#ffb7a5;
-        transition:all .15s ease;
+        background:transparent; color:#ffb7a5; transition:all .15s ease;
       }
       .chem-btn .stButton>button:hover{
         transform:translateY(-2px);
         border-color:#ff7a59; box-shadow:0 4px 12px rgba(0,0,0,.25);
       }
-      /* 활성 버튼 하이라이트 */
-      .chem-btn .active>button{
+      .chem-btn.active .stButton>button{
         background:#ff7a59; color:#fff; border-color:#ff7a59;
       }
-      /* 버튼 사이 간격 */
-      .chem-stack{display:flex; flex-direction:column; align-items:center; gap:14px; padding:12px 0 24px;}
     </style>
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="chem-stack">', unsafe_allow_html=True)
+
+    # 아이콘 버튼 렌더링
     for slug, icon, label in NAV_ITEMS:
-        # 활성 버튼엔 active 클래스를 추가하기 위해 container 사용
-        container = st.container()
-        container.markdown('<div class="chem-btn">', unsafe_allow_html=True)
-        # help=툴팁, key로 고유 식별
-        clicked = st.button(icon, key=f"btn_{slug}", help=label, use_container_width=False)
-        container.markdown('</div>', unsafe_allow_html=True)
+        is_active = (slug == current)
+        st.markdown(f'<div class="chem-btn {"active" if is_active else ""}">', unsafe_allow_html=True)
+        clicked = st.button(icon, key=f"nav_{slug}", help=label)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        # 활성 스타일 적용(한 번 더 렌더 시 active 클래스 부여)
-        if st.session_state.get("nav") == slug:
-            container.markdown("""
-            <style>
-              div[data-testid="stVerticalBlock"] div.chem-btn .stButton:has(button){ }
-              /* 위 container 내부의 버튼을 active로 재스타일 */
-            </style>
-            """, unsafe_allow_html=True)
-            # 위 CSS :has 지원이 브라우저마다 달라 간단히 재렌더로 커버
-
-        if clicked:
+        if clicked and not is_active:
             st.session_state["nav"] = slug
-            st.query_params(nav=slug)     # URL에도 반영(새 탭 아님)
-            st.rerun()                    # 현재 탭에서 즉시 전환
+            _set_nav_query(slug)  # URL 동기화(새 탭 아님)
+            st.rerun()
+
     st.markdown('</div>', unsafe_allow_html=True)
+
+# 이후엔 current 값을 기준으로 라우팅:
+# if current == "overview": page_overview()
+# elif current == "basic":  page_basic_stats()
+# ...
+
 
 # ==============================
 # 페이지 함수들

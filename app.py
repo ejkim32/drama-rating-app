@@ -239,7 +239,7 @@ if 'start airing' in df_mlb.columns:
     df_mlb['start airing'] = pd.to_numeric(df_mlb['start airing'], errors='coerce')
 
 # ===== Colab 스타일 X/y, 전처리 정의 =====
-drop_cols = [c for c in ['배우명','드라마명','genres','day','network','score','start airing'] if c in df_mlb.columns]
+drop_cols = [c for c in ['배우명','드라마명','genres','day','network','score'] if c in df_mlb.columns]  # start airing 포함
 X_colab_base = df_mlb.drop(columns=drop_cols, errors='ignore')
 y_all = df_mlb['score']
 
@@ -837,6 +837,7 @@ with tabs[6]:
 
     scoring = st.selectbox("스코어링", ["neg_root_mean_squared_error", "r2"], index=0)
     cv = st.number_input("CV 폴드 수", 3, 10, 5, 1)
+    cv_shuffle = st.checkbox("CV 셔플(shuffle)", value=False)
 
     # ---- 파라미터 셀렉터 유틸 ----
     def render_param_selector(label, options):
@@ -883,7 +884,7 @@ with tabs[6]:
         "Ridge": ("nonsparse", Ridge()),
         "Lasso": ("nonsparse", Lasso()),
         "ElasticNet": ("nonsparse", ElasticNet(max_iter=10000)),
-        "SGDRegressor": ("nonsparse", SGDRegressor(max_iter=10000)),
+        "SGDRegressor": ("nonsparse", SGDRegressor(max_iter=10000, random_state=SEED)),
         "SVR": ("nonsparse", SVR()),
         "Decision Tree": ("tree", DecisionTreeRegressor(random_state=SEED)),
         "Random Forest": ("tree", RandomForestRegressor(random_state=SEED)),
@@ -946,7 +947,7 @@ with tabs[6]:
         # ---- 실행 ----
     if st.button("GridSearch 실행"):
         # ✅ 재현성 고정: KFold with shuffle + seed
-        cv_obj = KFold(n_splits=int(cv), shuffle=True, random_state=SEED)
+        cv_obj = KFold(n_splits=int(cv), shuffle=True, random_state=(SEED if cv_shuffle else None))
     
         gs = GridSearchCV(
             estimator=pipe,

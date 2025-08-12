@@ -37,7 +37,7 @@ def rmse(y_true, y_pred):
     return float(np.sqrt(mean_squared_error(y_true, y_pred)))
 
 # ===== 페이지 설정 =====
-st.header("케미스코어")
+st.header("💫케미스코어")
 st.set_page_config(page_title="K-드라마 분석/예측", page_icon="🎬", layout="wide")
 
 # ===== 전역 시드 고정 =====

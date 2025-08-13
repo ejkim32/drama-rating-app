@@ -738,6 +738,270 @@ def page_predict():
     pred = float(model_full.predict(user_base)[0])
     st.success(f"💡 예상 평점: {pred:.2f}")
 
+    # ✅ 카운터팩추얼에서 다시 쓰려고 세션에 보관
+        st.session_state["cf_user_raw"] = user_raw.copy()
+        st.session_state["cf_pred"] = float(pred)
+        st.session_state["cf_model"] = model_full
+
+                               # =========================
+        # 🔎 What-if (독립 액션 Top N, 중복효과/합산/조합 금지)
+        # =========================
+        st.markdown("---")
+        st.subheader("2) 케미스코어 평점 예측측")
+
+        # 🔹 기존에 만든 타깃 연령대 selectbox를 재사용 (중복 위젯 생성 금지)
+        target_age_group = st.session_state.get("target_age_group")
+        if not target_age_group:
+            # 혹시 세션이 비어있다면, 상단 입력에서 기본 후보를 사용해 설정
+            age_group_candidates = ["10대", "20대", "30대", "40대", "50대", "60대 이상"]
+            target_age_group = age_group_candidates[1]
+            st.session_state["target_age_group"] = target_age_group
+
+        def _age_group_to_decade(s: str) -> int:
+            m = re.search(r"(\d+)", str(s))
+            if m:
+                n = int(m.group(1))
+                return 60 if "이상" in str(s) and n < 60 else n
+            return 0
+
+        actor_decade  = (int(input_age)//10)*10
+        target_decade = _age_group_to_decade(target_age_group)
+        gap = abs(actor_decade - target_decade)
+
+        with st.container():
+            st.markdown("**🎯 타깃-배우 연령대 정렬 가이드**")
+            if target_decade <= 20:
+                st.markdown("- 톤/장르: romance · comedy · action 위주, 가벼운 몰입 유도")
+                st.markdown("- 편성: 토요일/주말 강세, 클립 중심 SNS 확산 고려")
+            elif target_decade <= 30:
+                st.markdown("- 톤/장르: romance/drama에 스릴러/미스터리 가미(하이브리드)")
+                st.markdown("- 플랫폼: OTT 동시 공개로 화제성 확보")
+            elif target_decade <= 40:
+                st.markdown("- 톤/장르: drama / thriller / society 중심, 주제 밀도를 높임")
+                st.markdown("- 편성: 주중 집중, 에피소드 퀄리티 변동 최소화")
+            else:
+                st.markdown("- 톤/장르: hist_war / family / society, 스토리 완성도·메시지 강화")
+                st.markdown("- 편성: 시청 루틴 반영한 안정적 슬롯")
+
+            if gap >= 20:
+                st.info(f"배우 나이 {input_age}세(≈{actor_decade}대) vs 타깃 {target_age_group} → **연령대 격차 큼**. "
+                        "장르/편성/플랫폼을 타깃 성향에 맞춘 변경안의 우선순위를 높이세요.")
+            else:
+                st.caption(f"배우 나이 {input_age}세(≈{actor_decade}대)와 타깃 {target_age_group}의 격차가 크지 않습니다.")
+
+        # ── 공통 유틸: user_raw → user_base(feature vector)
+        def _build_user_base(df_raw: pd.DataFrame) -> pd.DataFrame:
+            _user_mlb = colab_multilabel_transform(df_raw, cols=('genres','day','network'))
+            _base = pd.concat([X_colab_base.iloc[:0].copy(), _user_mlb], ignore_index=True)
+            _base = _base.drop(columns=[c for c in drop_cols if c in _base.columns], errors='ignore')
+            for c in X_colab_base.columns:
+                if c not in _base.columns:
+                    _base[c] = 0
+            _base = _base[X_colab_base.columns].tail(1)
+            # 숫자열만 숫자화/결측 보정
+            num_cols_ = X_colab_base.select_dtypes(include=[np.number]).columns.tolist()
+            if len(num_cols_) > 0:
+                _base[num_cols_] = _base[num_cols_].apply(pd.to_numeric, errors="coerce")
+                _base[num_cols_] = _base[num_cols_].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+            return _base
+
+        def _predict_from_raw(df_raw: pd.DataFrame) -> float:
+            vb = _build_user_base(df_raw)
+            return float(model_full.predict(vb)[0])
+
+        current_pred = float(pred)  # 출발점
+
+        # ── 후보 클래스 안전 추출
+        def _classes_safe(key: str):
+            return [s for s in (st.session_state.get(f"mlb_classes_{key}", []) or [])]
+
+        genre_classes   = [g for g in _classes_safe("genres") if isinstance(g, str)]
+        day_classes     = [d for d in _classes_safe("day") if isinstance(d, str)]
+        network_classes = [n for n in _classes_safe("network") if isinstance(n, str)]
+
+        # ── 액션 빌더 (카테고리: genre/schedule/platform/casting/married)
+        def _add_genre(tag: str):
+            def _fn(df):
+                new = df.copy()
+                cur = list(new.at[0, "genres"])
+                if tag not in cur:
+                    cur = cur + [tag]
+                new.at[0, "genres"] = cur
+                return new
+            return _fn
+
+        def _set_days(days_list: list[str]):
+            def _fn(df):
+                new = df.copy()
+                new.at[0, "day"] = days_list
+                return new
+            return _fn
+
+        def _ensure_platform(p: str):
+            def _fn(df):
+                new = df.copy()
+                cur = list(new.at[0, "network"])
+                if p not in cur:
+                    cur = cur + [p]
+                new.at[0, "network"] = cur
+                return new
+            return _fn
+
+        def _set_role(val: str):
+            def _fn(df):
+                new = df.copy()
+                new.at[0, "role"] = val
+                return new
+            return _fn
+
+        def _set_married(val: str):
+            def _fn(df):
+                new = df.copy()
+                new.at[0, "married"] = val
+                return new
+            return _fn
+
+        # ── 후보 생성 (현실 제약: 데이터에 없는 옵션은 자동 제외)
+        actions = []
+
+        # [장르] 타깃 연령대에 맞는 우선순위 큐 (데이터에 존재하는 것만)
+        g_priority_by_target = {
+            "young": ["romance", "comedy", "action", "thriller"],
+            "adult": ["drama", "thriller", "hist_war", "romance", "comedy"],
+            "senior": ["hist_war", "drama", "society", "thriller"]
+        }
+        if target_decade <= 30:
+            glist = g_priority_by_target["young"]
+        elif target_decade <= 40:
+            glist = g_priority_by_target["adult"]
+        else:
+            glist = g_priority_by_target["senior"]
+        for g in glist:
+            if g in genre_classes:
+                actions.append(("genre", f"장르 추가: {g}", _add_genre(g)))
+
+        # [편성] 단일 요일 세팅 (있을 때만)
+        if "saturday" in day_classes:
+            actions.append(("schedule", "편성 요일: 토요일 단일", _set_days(["saturday"])))
+        if "friday" in day_classes:
+            actions.append(("schedule", "편성 요일: 금요일 단일", _set_days(["friday"])))
+        if "wednesday" in day_classes:
+            actions.append(("schedule", "편성 요일: 수요일 단일", _set_days(["wednesday"])))
+
+        # [플랫폼] 존재하는 플랫폼만
+        if "NETFLIX" in network_classes:
+            actions.append(("platform", "플랫폼 포함: NETFLIX", _ensure_platform("NETFLIX")))
+        if "TVN" in network_classes:
+            actions.append(("platform", "플랫폼 포함: TVN", _ensure_platform("TVN")))
+        if "WAVVE" in network_classes:
+            actions.append(("platform", "플랫폼 포함: WAVVE", _ensure_platform("WAVVE")))
+
+        # [캐스팅/결혼] 현재 값과 다를 때만 후보 추가
+        if "role" in user_raw.columns and str(user_raw.at[0, "role"]) != "주연":
+            actions.append(("casting", "역할: 주연으로 변경", _set_role("주연")))
+        if "married" in user_raw.columns and str(user_raw.at[0, "married"]) != "미혼":
+            actions.append(("married", "결혼여부: 미혼으로 변경", _set_married("미혼")))
+
+        # ── 각 액션(단독 적용)의 리프트만 계산 → 카테고리별 최고 1개 선택
+        scored = []
+        for cat, desc, fn in actions:
+            cand = fn(user_raw)
+            p = _predict_from_raw(cand)
+            scored.append({"카테고리": cat, "변경안": desc, "예측": p, "리프트": p - current_pred})
+
+        if not scored:
+            st.info("추천할 액션이 없습니다. (현실 제약/입력값으로 인해 후보가 없을 수 있어요)")
+        else:
+            df_scored = pd.DataFrame(scored)
+
+            # 카테고리별 최고 리프트 1개만 남기기
+            idx_best = df_scored.groupby("카테고리")["리프트"].idxmax()
+            df_best_per_cat = df_scored.loc[idx_best].copy()
+
+            # 최종 Top N (합산 금지, 독립 효과만)
+            top_n = st.slider("추천 개수", 3, 7, 5, key="rec_topn_slider")
+            df_top = df_best_per_cat.sort_values(["리프트", "예측"], ascending=False).head(top_n).reset_index(drop=True)
+
+            # 테이블
+            st.dataframe(
+                df_top[["카테고리","변경안"]],
+                use_container_width=True
+            )
+
+            # ── 액션별 솔루션 요약 (중복 설명은 카테고리 정의로 대체)
+            st.markdown("#### 🔍 액션별 솔루션 요약")
+            genre_reason = {
+                "thriller": "긴장감·몰입도 상승 → 체류시간/평점 우호적",
+                "hist_war": "작품성·완성도 포인트로 평점 상향",
+                "sf": "신선한 소재/세계관으로 초반 흡입력↑",
+                "action": "시각적 임팩트로 초반 만족도 상승",
+                "romance": "대중성 높아 넓은 타깃 적합",
+                "drama": "보편적 공감 서사로 안정적",
+                "comedy": "가벼운 톤으로 폭넓은 수용층 확보",
+                "society": "사회적 메시지·현실감으로 충성도↑",
+            }
+            day_reason = {
+                "월요일": "한 주의 시작, 고정 시청층 확보와 입소문 형성 기회",
+                "화요일": "주중 초반, 지속 시청 유도에 유리",
+                "수요일": "주중 중앙부 집중 시청층 공략",
+                "목요일": "주말 전환 직전, 긴장감 있는 전개로 시청률 상승 유도",
+                "금요일": "주말 초입 노출로 회차 전환율 확보",
+                "토요일": "시청 가용시간↑ → 몰입/구전 효과 기대",
+                "일요일": "가족·전 연령대 타깃, 다음 주 시청 예고 효과 극대화"
+            }
+            
+            platform_reason = {
+                "ENT": "예능 중심 편성으로 대중적 화제성 확보 용이",
+                "ETC_P": "기타 케이블 채널로 틈새 시청층 공략",
+                "GPC": "전문 채널 특화 타깃 시청층 집중",
+                "JTBC": "프라임 타임 드라마 강세, 화제성 높은 시리즈 제작 경험",
+                "KBS": "전국 단위 지상파 커버리지, 전 세대 접근성 우수",
+                "NETFLIX": "글로벌 노출/알고리즘 추천 → 화제성/리뷰 확보 용이",
+                "SBS": "트렌디한 드라마·예능 라인업으로 젊은층 선호",
+                "TVN": "프라임 편성·브랜딩 시너지",
+                "MBC": "오랜 드라마 제작 전통, 안정적 시청층 확보"
+            }
+            
+            etc_reason = {
+                "주연": "캐릭터 공감/노출 극대화",
+                "미혼": "로맨스/청춘물 톤 결합 시 몰입도↑"
+            }
+
+
+            def _explain(desc: str) -> str:
+                why = []
+                # 장르
+                m = re.search(r"장르 추가:\s*([A-Za-z_]+)", desc)
+                if m:
+                    g = m.group(1).lower()
+                    if g in genre_reason:
+                        why.append(f"장르 효과: {genre_reason[g]}")
+                    if target_decade <= 20 and g in {"romance","comedy","action"}:
+                        why.append("젊은 타깃과 톤 매칭 양호")
+                    if target_decade >= 40 and g in {"hist_war","drama","thriller","society"}:
+                        why.append("성숙 타깃 선호 주제와 부합")
+                # 요일
+                if "토요일" in desc or "saturday" in desc:
+                    why.append(f"편성 효과: {day_reason['토요일']}")
+                if "금요일" in desc or "friday" in desc:
+                    why.append(f"편성 효과: {day_reason['금요일']}")
+                if "수요일" in desc or "wednesday" in desc:
+                    why.append(f"편성 효과: {day_reason['수요일']}")
+                # 플랫폼
+                for k, v in platform_reason.items():
+                    if k in desc:
+                        why.append(f"플랫폼 효과: {v}")
+                # 기타
+                if "주연" in desc:
+                    why.append(f"캐스팅 효과: {etc_reason['주연']}")
+                if "미혼" in desc:
+                    why.append(f"캐릭터 톤: {etc_reason['미혼']}")
+                return " / ".join(why) if why else "데이터 기반 상 상승 요인"
+
+            st.markdown("**📝 상위 변경안 솔루션 (독립 효과 기준)**")
+            for _, r in df_top.iterrows():
+                st.markdown(f"- **{r['변경안']}** · {_explain(r['변경안'])}")
+
 # ================== 사이드바 (네비 + 설정) ==================
 NAV_ITEMS = [
     ("overview", "🏠", "개요",        page_overview),

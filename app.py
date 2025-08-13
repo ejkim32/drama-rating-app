@@ -629,7 +629,10 @@ def page_tuning():
         st.caption(f"ccp_alpha 후보 자동 생성: {len(base_grid['model__ccp_alpha'])}개")
 
     # 기존 render_param_selector 있으면 사용, 없으면 폴백
-    rsel = render_param_selector if "render_param_selector" in globals() else _fallback_render_param_selector
+    # 수정
+    rsel = globals().get("render_param_selector", None)
+    if rsel is None:
+        rsel = lambda k, v: v  # 폴백: UI 없이 값 그대로 사용
     user_grid = {k: rsel(k, v) for k, v in base_grid.items()}
 
     with st.expander("선택한 파라미터 확인"):

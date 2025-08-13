@@ -559,34 +559,33 @@ def page_tuning():
 
     # --- 기본 그리드 (Pruned은 placeholder만; 실제 후보는 아래서 자동 생성) ---
     default_param_grids = {
-        "KNN": {"poly__degree":[1,2,3], "knn__n_neighbors":[3,4,5,6,7,8,9,10]},
+        "KNN": {"poly__degree":[2,3], "knn__n_neighbors":[3,4,5]},
         "Linear Regression (Poly)": {"poly__degree":[1,2,3]},
-        "Ridge": {"poly__degree":[1,2,3], "model__alpha":[0.001,0.01,0.1,1,10,100,1000]},
-        "Lasso": {"poly__degree":[1,2,3], "model__alpha":[0.001,0.01,0.1,1,10,100,1000]},
-        "ElasticNet": {"poly__degree":[1,2,3], "model__alpha":[0.001,0.01,0.1,1,10,100,1000], "model__l1_ratio":[0.1,0.5,0.9]},
+        "Ridge": {"poly__degree":[2,3], "model__alpha":[0.1,1,10,100,1000]},
+        "Lasso": {"poly__degree":[2,3], "model__alpha":[0.001,0.01,0.1,1]},
+        "ElasticNet": {"poly__degree":[2,3], "model__alpha":[0.001,0.01,0.1,1], "model__l1_ratio":[0.1,0.5,0.9]},
         "SGDRegressor": {"poly__degree":[1,2,3], "model__learning_rate":["constant","invscaling","adaptive"]},
         "SVR": {"model__kernel":["poly","rbf","sigmoid"], "model__degree":[1,2,3]},
         "Decision Tree": {
-            "model__max_depth":[10,15,20,25,30],
-            "model__min_samples_split":[5,6,7,8,9,10],
-            "model__min_samples_leaf":[2,3,4,5],
-            "model__max_leaf_nodes":[None,10,20,30],
+            "model__max_depth":[10,15,20],
+            "model__min_samples_split":[5,6,7,8],
+            "model__min_samples_leaf":[2,3],
+            "model__max_leaf_nodes":[None,10,20],
         },
         "Decision Tree (Pruned)": {  # 노트북 재현: 여기 값은 UI에만 표시, 실제 검색은 아래 수동 루프
             "model__ccp_alpha": [0.0, 3.146231327807963e-05, 7.543988269811632e-05]
         },
         "Random Forest": {
-            "model__n_estimators":[100,200,300],
-            "model__min_samples_split":[5,6,7,8,9,10],
-            "model__max_depth":[5,10,15,20,25,30],
+            "model__n_estimators":[200,300],
+            "model__min_samples_split":[5,6,7,8],
+            "model__max_depth":[10,15,20,25],
         },
     }
     if "XGBRegressor" in model_zoo:
         default_param_grids["XGBRegressor"] = {
-            "model__n_estimators":[200,400],
-            "model__max_depth":[3,5,7],
-            "model__learning_rate":[0.03,0.1,0.3],
-            "model__subsample":[0.8,1.0],
+            "model__n_estimators":[100, 200],
+            "model__max_depth":[1, 5, 10],
+            "model__learning_rate":[0.1,0.2,0.3],
             "model__colsample_bytree":[0.8,1.0],
         }
 

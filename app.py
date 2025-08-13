@@ -814,7 +814,7 @@ def page_predict():
                                         key="target_age_group_main")
         st.session_state["target_age_group"] = target_age_group
         st.session_state["actor_age"] = int(input_age)
-            predict_btn = st.button("예측 실행")
+        predict_btn = st.button("예측 실행")
 
     # ---- 예측 상태 복구/유지 로직 ----
     # 버튼을 누른 경우: 새 모델/예측을 계산하고 세션에 저장
@@ -828,10 +828,10 @@ def page_predict():
             model_full = Pipeline([('preprocessor', preprocessor),
                                    ('model', RandomForestRegressor(n_estimators=100, random_state=SEED))])
             st.caption("예측 모델: 기본 RandomForest (미튜닝)")
-
+    
         # 2) 전체 데이터로 재학습
         model_full.fit(X_colab_base, y_all)
-
+    
         # 3) 현재 입력으로 예측
         user_raw = pd.DataFrame([{
             'age': int(input_age), 'gender': input_gender, 'role': input_role, 'married': input_married,
@@ -840,7 +840,7 @@ def page_predict():
         }])
         # 멀티라벨 인코더 클래스(옵션 집합)도 세션에 갱신해 두기
         st.session_state["target_age_group"] = st.session_state.get("target_age_group", derived_age_group)
-
+    
         # 예측
         def _build_user_base_for_pred(df_raw: pd.DataFrame) -> pd.DataFrame:
             _user_mlb = colab_multilabel_transform(df_raw, cols=('genres','day','network'))
@@ -855,10 +855,10 @@ def page_predict():
                 _base[num_cols_] = _base[num_cols_].apply(pd.to_numeric, errors="coerce")
                 _base[num_cols_] = _base[num_cols_].replace([np.inf, -np.inf], np.nan).fillna(0.0)
             return _base
-
+    
         user_base_now = _build_user_base_for_pred(user_raw)
         pred = float(model_full.predict(user_base_now)[0])
-
+    
         # 4) 세션 저장 (재실행/슬라이더 변경 시에도 유지)
         st.session_state["cf_user_raw"] = user_raw.copy()
         st.session_state["cf_pred"] = float(pred)
@@ -875,17 +875,17 @@ def page_predict():
             "network": list(input_plat),
             "genre_bucket": genre_bucket,
         }
-
+    
     # 버튼을 누르지 않았으면, 직전 예측 상태를 복구
     model_full = st.session_state.get("cf_model", None)
     user_raw   = st.session_state.get("cf_user_raw", None)
     pred       = st.session_state.get("cf_pred", None)
-
+    
     if model_full is None or user_raw is None or pred is None:
         # 아직 한 번도 예측을 실행하지 않은 상태
         st.info("좌측 입력을 설정한 뒤 **[예측 실행]**을 눌러주세요.")
         return
-
+    
     # (여기서부터는 언제든 세션의 모델/입력/예측을 사용)
     st.success(f"💡 예상 평점: {float(pred):.2f}")
 

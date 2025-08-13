@@ -554,7 +554,7 @@ def page_tuning():
     }
     if XGB_AVAILABLE:
         model_zoo["XGBRegressor"] = ("tree", XGBRegressor(
-            random_state=SEED, objective="reg:squarederror", n_jobs=-1, tree_method="hist"
+            random_state=SEED, objective="reg:squarederror", n_jobs=1, tree_method="hist"
         ))
 
     # --- 기본 그리드 (Pruned은 placeholder만; 실제 후보는 아래서 자동 생성) ---
@@ -629,7 +629,7 @@ def page_tuning():
         if model_name != "Decision Tree (Pruned)":
             cv_obj = KFold(n_splits=int(cv), shuffle=True, random_state=SEED) if cv_shuffle else int(cv)
             gs = GridSearchCV(estimator=pipe, param_grid=user_grid, cv=cv_obj,
-                              scoring=scoring, n_jobs=-1, refit=True, return_train_score=True)
+                              scoring=scoring, n_jobs=1, refit=True, return_train_score=True)
             with st.spinner("GridSearchCV 실행 중..."):
                 gs.fit(X_train, y_train)
 

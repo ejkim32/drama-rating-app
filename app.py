@@ -1066,7 +1066,7 @@ def page_predict():
         df_best_per_cat = df_scored.loc[idx_best].copy()
 
         # 최종 Top N (합산 금지, 독립 효과만)
-        top_n = st.slider("추천 개수", 3, 7, 5, key="rec_topn_slider")
+        top_n = st.slider("추천 개수", 3, 4, 3, key="rec_topn_slider")
         df_top = df_best_per_cat.sort_values(["리프트", "예측"], ascending=False).head(top_n).reset_index(drop=True)
 
         # 테이블

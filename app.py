@@ -1,10 +1,21 @@
 # =========================================
-# app.py  —  K-드라마 케미스코어 (Sparrow UI 스킨 + 사이드 네비)
+# app.py  —  K-드라마 케미스코어 (Sparrow UI 스킨 + 사이드 네비, Safe-Mode/403 회피 가드 포함)
 # =========================================
 
 # ---- page config MUST be first ----
 import streamlit as st
 st.set_page_config(page_title="케미스코어 | K-드라마 분석/예측", page_icon="🎬", layout="wide")
+
+# =========================
+# ⚙️ Safe Mode & Limits
+# =========================
+import os, time
+SAFE_MODE = os.getenv("CHEMI_SAFE_MODE", "1") not in ("0", "false", "False")
+SAFE_MAX_ROWS            = int(os.getenv("CHEMI_MAX_ROWS", "5000"))     # 튜닝에서 사용할 최대 행 수(샘플)
+SAFE_MAX_GSCV_EVALS      = int(os.getenv("CHEMI_MAX_EVALS", "120"))     # (그리드 조합수 × CV 폴드수)
+SAFE_MAX_PRUNED_ALPHAS   = int(os.getenv("CHEMI_MAX_PRUNED", "25"))     # Pruned 트리 후보 상한
+SAFE_GS_COOLDOWN_SEC     = int(os.getenv("CHEMI_GS_COOLDOWN", "15"))    # GridSearch 연타 방지
+SAFE_PRED_COOLDOWN_SEC   = int(os.getenv("CHEMI_PRED_COOLDOWN", "5"))   # 예측 연타 방지
 
 # ---- dependency guard (optional) ----
 import importlib.util
@@ -14,10 +25,11 @@ if _missing:
     st.stop()
 
 # ---- imports ----
-import os, ast, random, re, platform, time
+import ast, random, re, platform
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from typing import List, Dict, Any
 from sklearn.metrics import mean_squared_error, r2_score
 import plotly.express as px
 
@@ -88,11 +100,7 @@ def ensure_korean_font():
 _ = ensure_korean_font()
 
 # ===== Safe-run helpers (쿨다운 & 403 핸들링) =====
-COOLDOWN_SEC_GS   = 15   # GridSearch 버튼 쿨다운(초)
-COOLDOWN_SEC_PRED = 5    # 예측 버튼 쿨다운(초)
-
-def allow_run(key: str, cooldown: int) -> bool:
-    """버튼 중복 클릭/연타 방지: cooldown 초 이내 재실행 차단"""
+def _cooldown_ok(key: str, cooldown: int) -> bool:
     now = time.time()
     last = st.session_state.get(key)
     if last is None or (now - last) >= cooldown:
@@ -101,17 +109,24 @@ def allow_run(key: str, cooldown: int) -> bool:
     return False
 
 def run_safely(fn, *args, **kwargs):
-    """403(Fair-use) 등 치명 오류를 잡아 UI에서 안내하고 추가 실행을 멈춤"""
+    """403(Fair-use) 등 치명 오류를 잡아 UI에서 안내하고 같은 런에서 추가 실행을 멈춤"""
     try:
         return fn(*args, **kwargs)
     except Exception as e:
         msg = str(e).lower()
-        if "403" in msg or "fair-use" in msg:
-            st.error("요청이 403(Fair-use limit)으로 차단되었습니다. 후보/폴드/병렬을 줄여 다시 시도해 주세요.")
-            st.stop()  # 이후 동일 런 내 추가 실행 방지
+        if "403" in msg or "fair-use" in msg or "blocked" in msg:
+            st.error("호스팅 환경의 Fair-use 제한(403)으로 요청이 차단되었습니다. "
+                     "튜닝 그리드/폴드/후보 수를 줄이거나 Safe Mode를 유지해 주세요.")
+            st.stop()
         else:
             st.exception(e)
             st.stop()
+
+def count_param_evals(grid: Dict[str, List[Any]]) -> int:
+    total = 1
+    for k, v in grid.items():
+        total *= max(1, len(v))
+    return total
 
 # ====== Sparrow UI CSS ======
 def _inject_sparrow_css():
@@ -120,18 +135,7 @@ def _inject_sparrow_css():
       /* ---------- Layout / Typography ---------- */
       .block-container{padding-top:5rem; padding-bottom:5rem;}
       h1,h2,h3{font-weight:800;}
-      /* 연도별 평균 케미스코어 그래프 위쪽 간격 */
-    h3, .stPlotlyChart {
-            margin-top: 1rem !important;
-        }
-      /* ---------- Topbar ---------- */
-      .topbar{display:flex; align-items:flex-end; justify-content:space-between; margin:6px 0 14px;}
-      .topbar .title{font-size:28px; letter-spacing:-.2px; display:flex; gap:10px; align-items:center;}
-      .crumb{font-size:12px; color:#6b7280; margin-top:4px;}
-      .top-right{display:flex; gap:8px; align-items:center;}
-      .chip{background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:6px 10px; font-size:12px;}
-
-     # ... 기존 CSS 함수 안에서 Sidebar 관련 부분만 아래로 교체 ...
+      h3, .stPlotlyChart { margin-top: 1rem !important; }
       /* ---------- Sidebar ---------- */
       section[data-testid="stSidebar"]{
         width:220px !important; min-width:220px;
@@ -141,49 +145,27 @@ def _inject_sparrow_css():
       .sb-brand{display:flex; align-items:center; gap:10px; padding:14px 12px 10px;}
       .sb-brand .logo{font-size:20px}
       .sb-brand .name{font-size:16px; font-weight:800; letter-spacing:.2px}
-
       .sb-menu{padding:6px 8px 8px; display:flex; flex-direction:column;}
       .sb-nav{margin:2px 0;}
       .sb-nav .stButton>button{
-        width:100% !important;
-        display:flex; align-items:center; gap:10px; justify-content:flex-start;
-        background:transparent !important;
-        color:#e5e7eb !important;
-        border:1px solid #162033 !important;
-        border-radius:10px !important;
-        padding:8px 10px !important;
-        font-size:14px !important;
-        box-shadow:none !important;
-        opacity:1 !important;
+        width:100% !important; display:flex; align-items:center; gap:10px; justify-content:flex-start;
+        background:transparent !important; color:#e5e7eb !important;
+        border:1px solid #162033 !important; border-radius:10px !important;
+        padding:8px 10px !important; font-size:14px !important; box-shadow:none !important; opacity:1 !important;
       }
-      .sb-nav .stButton>button:hover{
-        background:#111a2b !important;
-        border-color:#25324a !important;
-      }
-      .sb-nav.active .stButton>button{
-        background:#2563eb !important;
-        border-color:#2563eb !important;
-        color:#ffffff !important;
-      }
-
+      .sb-nav .stButton>button:hover{ background:#111a2b !important; border-color:#25324a !important; }
+      .sb-nav.active .stButton>button{ background:#2563eb !important; border-color:#2563eb !important; color:#ffffff !important; }
       .sb-card{background:#0f172a; border:1px solid #1f2937; border-radius:12px; padding:10px; margin-top:8px;}
       .sb-card h4{margin:0 0 6px 0; font-size:12px; color:#cbd5e1; font-weight:800;}
       .sb-footer{margin-top:auto; padding:10px 12px; font-size:11px; color:#9ca3af; border-top:1px solid #070c16;}
-
       /* ---------- Cards ---------- */
       .kpi-row{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:8px 0 6px;}
-      .kpi{
-        background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px;
-        box-shadow:0 6px 18px rgba(17,24,39,.04);
-      }
+      .kpi{ background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px;
+            box-shadow:0 6px 18px rgba(17,24,39,.04); }
       .kpi h6{margin:0 0 4px; font-size:12px; color:#6b7280; font-weight:800;}
       .kpi .v{font-size:22px; font-weight:800; line-height:1;}
       .kpi .d{font-size:12px; color:#10b981; font-weight:700;}
-
-      /* Plot containers tighter top margin */
       div[data-testid="stPlotlyChart"], div.stPlot {margin-top:8px;}
-
-      /* 메인 컨테이너 상단 여백 살짝 키워서 카드 잘림 방지 */
       .block-container{padding-top:1.4rem; padding-bottom:2.2rem;}
       .kpi-row{ margin-bottom: 18px; }
       div[data-testid="stPlotlyChart"]{ margin-top:8px; }
@@ -208,13 +190,16 @@ def clean_cell_colab(x):
             return [x.strip()]
     return [str(x).strip()]
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_data():
     raw = pd.read_json('drama_d.json')
     if isinstance(raw, pd.Series):
         raw = pd.DataFrame({c: pd.Series(v) for c, v in raw.to_dict().items()})
     else:
         raw = pd.DataFrame({c: pd.Series(v) for c, v in raw.to_dict().items()})
+    # Safe mode: 너무 큰 데이터면 샘플링
+    if SAFE_MODE and len(raw) > SAFE_MAX_ROWS:
+        raw = raw.sample(SAFE_MAX_ROWS, random_state=SEED).reset_index(drop=True)
     return raw
 
 raw_df = load_data()
@@ -370,20 +355,12 @@ def page_overview():
         _df['start airing'] = pd.to_numeric(_df['start airing'], errors='coerce')
         _df['score'] = pd.to_numeric(_df['score'], errors='coerce')
         _df = _df.dropna(subset=['start airing', 'score'])
-    
         if not _df.empty:
             last_year = int(_df['start airing'].max())
             recent = _df[_df['start airing'].between(last_year-1, last_year)]
-    
-            name_col = '드라마명' if '드라마명' in recent.columns else (
-                'title' if 'title' in recent.columns else recent.columns[0]
-            )
-    
-            recent_unique = (
-                recent.sort_values('score', ascending=False)
-                      .drop_duplicates(subset=[name_col], keep='first')
-            )
-    
+            name_col = '드라마명' if '드라마명' in recent.columns else ('title' if 'title' in recent.columns else recent.columns[0])
+            recent_unique = (recent.sort_values('score', ascending=False)
+                                   .drop_duplicates(subset=[name_col], keep='first'))
             top_recent = recent_unique.sort_values('score', ascending=False).head(10)
             fig_recent = px.bar(top_recent, x=name_col, y='score', text='score')
             fig_recent.update_traces(texttemplate='%{text:.2f}', textposition='outside')
@@ -391,22 +368,14 @@ def page_overview():
             st.plotly_chart(fig_recent, use_container_width=True)
         else:
             st.info("최근 연도 데이터가 없습니다.")
-
     with c2:
         st.subheader("플랫폼별 작품 수 (TOP 10)")
-        _p = raw_df.copy()
-        _p['network'] = _p['network'].apply(clean_cell_colab)
-        _p = _p.explode('network').dropna(subset=['network'])
-        p_cnt = (
-                raw_df.assign(network=raw_df["network"].apply(clean_cell_colab))
-                          .explode("network")
-                          .dropna(subset=["network"])
-                          .groupby("network")
-                          .size()
-                          .reset_index(name="count")
-                )
+        p_cnt = (raw_df.assign(network=raw_df["network"].apply(clean_cell_colab))
+                        .explode("network")
+                        .dropna(subset=["network"])
+                        .groupby("network").size()
+                        .reset_index(name="count"))
         p_cnt = p_cnt.loc[:, ~p_cnt.columns.duplicated()].copy()
-
         fig_p = px.bar(p_cnt, x='network', y='count')
         fig_p.update_layout(height=320, margin=dict(l=10, r=10, t=20, b=40))
         st.plotly_chart(fig_p, use_container_width=True)
@@ -456,10 +425,8 @@ def page_dist():
     if actor_col is None:
         st.info("배우 식별 컬럼을 찾을 수 없어(배우명/actor) 이 섹션을 건너뜁니다.")
         return
-    gdf = (
-        pd.DataFrame({actor_col: raw_df[actor_col], 'genres': raw_df['genres'].apply(clean_cell_colab)})
-        .explode('genres').dropna(subset=[actor_col,'genres'])
-    )
+    gdf = (pd.DataFrame({actor_col: raw_df[actor_col], 'genres': raw_df['genres'].apply(clean_cell_colab)})
+              .explode('genres').dropna(subset=[actor_col,'genres']))
     genre_cnt = gdf.groupby(actor_col)['genres'].nunique().rename('장르개수')
     actor_mean = (raw_df.groupby(actor_col, as_index=False)['score']
                   .mean().rename(columns={'score':'배우평균점수'}))
@@ -523,10 +490,16 @@ def page_tuning():
         st.session_state["split_key"] = float(0.2)
     X_train, X_test, y_train, y_test = st.session_state["split_colab"]
 
+    # Safe Mode 안내
+    if SAFE_MODE:
+        st.info("🛟 Safe Mode: 데이터가 크면 자동 샘플링하고, 과도한 GridSearch를 차단합니다. "
+                "환경변수 CHEMI_SAFE_MODE=0 으로 해제할 수 있어요.")
+
     scoring = st.selectbox("스코어링", ["neg_root_mean_squared_error", "r2"], index=0)
-    cv = st.number_input("CV 폴드 수", 3, 5, 5, 1)
+    cv = st.number_input("CV 폴드 수", 3, 5 if SAFE_MODE else 10, 5 if SAFE_MODE else 5, 1)
     cv_shuffle = st.checkbox("CV 셔플(shuffle)", value=False)
 
+    # --- 파라미터 선택기 ---
     def render_param_selector(label, options):
         display_options, to_py = [], {}
         for v in options:
@@ -552,6 +525,7 @@ def page_tuning():
         uniq=[];  [uniq.append(v) for v in chosen if v not in uniq]
         return uniq
 
+    # --- 모델 목록 ---
     model_zoo = {
         "KNN": ("nonsparse", KNeighborsRegressor()),
         "Linear Regression (Poly)": ("nonsparse", LinearRegression()),
@@ -569,6 +543,7 @@ def page_tuning():
             random_state=SEED, objective="reg:squarederror", n_jobs=1, tree_method="hist"
         ))
 
+    # --- 기본 그리드 ---
     default_param_grids = {
         "KNN": {"poly__degree":[2,3], "knn__n_neighbors":[3,4,5]},
         "Linear Regression (Poly)": {"poly__degree":[1,2,3]},
@@ -607,6 +582,7 @@ def page_tuning():
     st.markdown("**하이퍼파라미터 선택**")
     base_grid = dict(default_param_grids.get(model_name, {}))
 
+    # Pruned 알파 후보 자동 생성 + 상한
     if model_name == "Decision Tree (Pruned)":
         X_train_transformed = preprocessor.fit_transform(X_train, y_train)
         tmp_tree = DecisionTreeRegressor(random_state=SEED)
@@ -619,124 +595,128 @@ def page_tuning():
             ccp_alphas = ccp_alphas[:-1]
         must_include = np.array([3.146231327807963e-05, 7.543988269811632e-05], dtype=float)
         ccp_candidates = np.unique(np.concatenate([ccp_alphas, must_include]))
+        # 상한
+        if SAFE_MODE and len(ccp_candidates) > SAFE_MAX_PRUNED_ALPHAS:
+            idx = np.linspace(0, len(ccp_candidates)-1, SAFE_MAX_PRUNED_ALPHAS).astype(int)
+            ccp_candidates = ccp_candidates[idx]
         base_grid["model__ccp_alpha"] = list(ccp_candidates.tolist())
-        st.caption(f"ccp_alpha 후보(노트북 방식): {len(base_grid['model__ccp_alpha'])}개")
+        st.caption(f"ccp_alpha 후보: {len(base_grid['model__ccp_alpha'])}개")
 
-    rsel = globals().get("render_param_selector", None) or (lambda k, v: v)
-    user_grid = {k: rsel(k, v) for k, v in base_grid.items()}
+    # 파라미터 선택 UI
+    def _render(label, options):
+        # Safe mode일 땐 옵션을 그대로 사용(불필요한 폭증 방지)
+        return options if SAFE_MODE else render_param_selector(label, options)
+    user_grid = {k: _render(k, v) for k, v in base_grid.items()}
 
     with st.expander("선택한 파라미터 확인"):
         st.write(user_grid)
 
     # =========================
-    # 실행 버튼 (+쿨다운/안전실행)
+    # 실행 버튼 (+쿨다운/안전실행/과다탐색 차단)
     # =========================
     if st.button("GridSearch 실행", key="btn_gs"):
-        if not allow_run("last_gs_time", COOLDOWN_SEC_GS):
-            st.warning("잠시만요! 연속 실행을 잠깐 막고 있어요. 몇 초 뒤 다시 눌러주세요.")
-        else:
-            # --- (A) 일반 모델: 기존 GridSearchCV 유지 ---
-            if model_name != "Decision Tree (Pruned)":
-                cv_obj = KFold(n_splits=int(cv), shuffle=True, random_state=SEED) if cv_shuffle else int(cv)
-                gs = GridSearchCV(estimator=pipe, param_grid=user_grid, cv=cv_obj,
-                                  scoring=scoring, n_jobs=1, refit=True, return_train_score=True)
-                with st.spinner("GridSearchCV 실행 중..."):
-                    run_safely(gs.fit, X_train, y_train)
+        if not _cooldown_ok("last_gs_time", SAFE_GS_COOLDOWN_SEC):
+            st.warning("잠깐만요! 연속 실행을 잠시 제한 중이에요. 몇 초 후 다시 눌러 주세요.")
+            st.stop()
 
-                st.subheader("베스트 결과")
-                st.write("Best Params:", gs.best_params_)
-                if scoring == "neg_root_mean_squared_error":
-                    st.write("Best CV RMSE (음수):", gs.best_score_)
-                else:
-                    st.write(f"Best CV {scoring}:", gs.best_score_)
+        if model_name != "Decision Tree (Pruned)":
+            # 과다 탐색 방지
+            combos = count_param_evals(user_grid)
+            total_evals = combos * int(cv)
+            if SAFE_MODE and total_evals > SAFE_MAX_GSCV_EVALS:
+                st.error(f"탐색량이 너무 큽니다: 조합 {combos} × CV {int(cv)} = {total_evals} > {SAFE_MAX_GSCV_EVALS}\n"
+                         f"→ 옵션/폴드 수를 줄이거나 Safe Mode 해제(CHEMI_SAFE_MODE=0) 후 소규모로 실행하세요.")
+                st.stop()
 
-                y_pred_tr = gs.predict(X_train); y_pred_te = gs.predict(X_test)
-                st.write("Train RMSE:", rmse(y_train, y_pred_tr))
-                st.write("Test RMSE:", rmse(y_test, y_pred_te))
-                st.write("Train R² Score:", r2_score(y_train, y_pred_tr))
-                st.write("Test R² Score:", r2_score(y_test, y_pred_te))
+            cv_obj = KFold(n_splits=int(cv), shuffle=True, random_state=SEED) if cv_shuffle else int(cv)
+            gs = GridSearchCV(estimator=pipe, param_grid=user_grid, cv=cv_obj,
+                              scoring=scoring, n_jobs=1, refit=True, return_train_score=True)
+            with st.spinner("GridSearchCV 실행 중..."):
+                run_safely(gs.fit, X_train, y_train)
 
-                st.session_state["best_estimator"] = gs.best_estimator_
-                st.session_state["best_params"] = gs.best_params_
-                st.session_state["best_name"] = model_name
-                st.session_state["best_cv_score"] = gs.best_score_
-                st.session_state["best_scoring"] = scoring
-                st.session_state["best_split_key"] = st.session_state.get("split_key")
+            st.subheader("베스트 결과")
+            st.write("Best Params:", gs.best_params_)
+            if scoring == "neg_root_mean_squared_error":
+                st.write("Best CV RMSE (음수):", gs.best_score_)
+            else:
+                st.write(f"Best CV {scoring}:", gs.best_score_)
 
-                cvres = pd.DataFrame(gs.cv_results_)
-                safe_cols = [c for c in ["rank_test_score","mean_test_score","std_test_score",
-                                         "mean_train_score","std_train_score","params"] if c in cvres.columns]
-                sorted_cvres = cvres.loc[:, safe_cols].sort_values("rank_test_score").reset_index(drop=True)
-                st.dataframe(sorted_cvres, use_container_width=True)
-                st.session_state["last_cvres"] = cvres
+            y_pred_tr = gs.predict(X_train); y_pred_te = gs.predict(X_test)
+            st.write("Train RMSE:", rmse(y_train, y_pred_tr))
+            st.write("Test RMSE:", rmse(y_test, y_pred_te))
+            st.write("Train R² Score:", r2_score(y_train, y_pred_tr))
+            st.write("Test R² Score:", r2_score(y_test, y_pred_te))
 
-                if model_name == "XGBRegressor" and not XGB_AVAILABLE:
-                    st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
-                return
-
-            # --- (B) Pruned: 노트북과 동일한 절차로 수동 스윕 (CV 사용 X, 고정 홀드아웃) ---
-            with st.spinner("Cost-Complexity Pruning (노트북 방식) 실행 중..."):
-                X_train_t = preprocessor.fit_transform(X_train, y_train)
-                X_test_t  = preprocessor.transform(X_test)
-
-                cand = user_grid.get("model__ccp_alpha", [])
-                if not cand:
-                    tmp_tree = DecisionTreeRegressor(random_state=SEED)
-                    path = tmp_tree.cost_complexity_pruning_path(X_train_t, y_train)
-                    ccp_alphas = np.array(path.ccp_alphas, dtype=float)
-                    ccp_alphas = ccp_alphas[ccp_alphas >= 0.0]
-                    if ccp_alphas.size > 0:
-                        ccp_alphas = np.unique(ccp_alphas)
-                    if ccp_alphas.size > 1:
-                        ccp_alphas = ccp_alphas[:-1]
-                    cand = ccp_alphas.tolist()
-                for must in [3.146231327807963e-05, 7.543988269811632e-05]:
-                    if must not in cand:
-                        cand.append(must)
-                cand = sorted(set(float(x) for x in cand))
-                # cand = cand[:12]  # 과부하 방지용 제한을 쓰고 싶다면 주석 해제
-
-                results = []
-                for a in cand:
-                    m = DecisionTreeRegressor(random_state=SEED, ccp_alpha=float(a))
-                    run_safely(m.fit, X_train_t, y_train)
-                    ytr = m.predict(X_train_t); yte = m.predict(X_test_t)
-                    results.append({
-                        "alpha": float(a),
-                        "train_rmse": rmse(y_train, ytr),
-                        "test_rmse":  rmse(y_test,  yte),
-                        "train_r2":   float(r2_score(y_train, ytr)),
-                        "test_r2":    float(r2_score(y_test,  yte)),
-                        "estimator":  m
-                    })
-
-                df_res = pd.DataFrame(results).sort_values("alpha").reset_index(drop=True)
-                best_idx = int(df_res["test_r2"].idxmax())
-                best_row = df_res.loc[best_idx]
-
-            st.subheader("베스트 결과 (노트북 방식)")
-            st.write("Best Params:\n\n", {"model__ccp_alpha": best_row["alpha"]})
-            st.write("Train RMSE:", best_row["train_rmse"])
-            st.write("Test RMSE:",  best_row["test_rmse"])
-            st.write("Train R² Score:", best_row["train_r2"])
-            st.write("Test R² Score:",  best_row["test_r2"])
-
-            best_alpha = float(best_row["alpha"])
-            best_pipeline = Pipeline([
-                ('preprocessor', preprocessor),
-                ('model', DecisionTreeRegressor(random_state=SEED, ccp_alpha=best_alpha))
-            ])
-            best_pipeline.fit(X_train, y_train)
-
-            st.session_state["best_estimator"] = best_pipeline
-            st.session_state["best_params"] = {"model__ccp_alpha": best_alpha}
-            st.session_state["best_name"] = "Decision Tree (Pruned) - NotebookStyle"
-            st.session_state["best_cv_score"] = None
-            st.session_state["best_scoring"] = "test_r2_max"
+            st.session_state["best_estimator"] = gs.best_estimator_
+            st.session_state["best_params"] = gs.best_params_
+            st.session_state["best_name"] = model_name
+            st.session_state["best_cv_score"] = gs.best_score_
+            st.session_state["best_scoring"] = scoring
             st.session_state["best_split_key"] = st.session_state.get("split_key")
 
-            st.markdown("**alpha sweep 로그 (노트북 재현)**")
-            st.dataframe(df_res[["alpha","train_rmse","test_rmse","train_r2","test_r2"]], use_container_width=True)
+            cvres = pd.DataFrame(gs.cv_results_)
+            safe_cols = [c for c in ["rank_test_score","mean_test_score","std_test_score",
+                                     "mean_train_score","std_train_score","params"] if c in cvres.columns]
+            sorted_cvres = cvres.loc[:, safe_cols].sort_values("rank_test_score").reset_index(drop=True)
+            st.dataframe(sorted_cvres, use_container_width=True)
+            st.session_state["last_cvres"] = cvres
+
+            if model_name == "XGBRegressor" and not XGB_AVAILABLE:
+                st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
+            return
+
+        # --- Pruned: 수동 스윕 ---
+        with st.spinner("Cost-Complexity Pruning 실행 중..."):
+            X_train_t = preprocessor.fit_transform(X_train, y_train)
+            X_test_t  = preprocessor.transform(X_test)
+
+            cand = user_grid.get("model__ccp_alpha", [])
+            # Safe Mode 상한
+            if SAFE_MODE and len(cand) > SAFE_MAX_PRUNED_ALPHAS:
+                idx = np.linspace(0, len(cand)-1, SAFE_MAX_PRUNED_ALPHAS).astype(int)
+                cand = [float(cand[i]) for i in idx]
+
+            results = []
+            for a in cand:
+                m = DecisionTreeRegressor(random_state=SEED, ccp_alpha=float(a))
+                run_safely(m.fit, X_train_t, y_train)
+                ytr = m.predict(X_train_t); yte = m.predict(X_test_t)
+                results.append({
+                    "alpha": float(a),
+                    "train_rmse": rmse(y_train, ytr),
+                    "test_rmse":  rmse(y_test,  yte),
+                    "train_r2":   float(r2_score(y_train, ytr)),
+                    "test_r2":    float(r2_score(y_test,  yte)),
+                    "estimator":  m
+                })
+
+            df_res = pd.DataFrame(results).sort_values("alpha").reset_index(drop=True)
+            best_idx = int(df_res["test_r2"].idxmax())
+            best_row = df_res.loc[best_idx]
+
+        st.subheader("베스트 결과 (노트북 방식)")
+        st.write("Best Params:\n\n", {"model__ccp_alpha": best_row["alpha"]})
+        st.write("Train RMSE:", best_row["train_rmse"])
+        st.write("Test RMSE:",  best_row["test_rmse"])
+        st.write("Train R² Score:", best_row["train_r2"])
+        st.write("Test R² Score:",  best_row["test_r2"])
+
+        best_alpha = float(best_row["alpha"])
+        best_pipeline = Pipeline([
+            ('preprocessor', preprocessor),
+            ('model', DecisionTreeRegressor(random_state=SEED, ccp_alpha=best_alpha))
+        ])
+        best_pipeline.fit(X_train, y_train)
+
+        st.session_state["best_estimator"] = best_pipeline
+        st.session_state["best_params"] = {"model__ccp_alpha": best_alpha}
+        st.session_state["best_name"] = "Decision Tree (Pruned) - NotebookStyle"
+        st.session_state["best_cv_score"] = None
+        st.session_state["best_scoring"] = "test_r2_max"
+        st.session_state["best_split_key"] = st.session_state.get("split_key")
+
+        st.markdown("**alpha sweep 로그**")
+        st.dataframe(df_res[["alpha","train_rmse","test_rmse","train_r2","test_r2"]], use_container_width=True)
 
 def page_ml():
     st.header("머신러닝 모델링")
@@ -815,11 +795,13 @@ def page_predict():
                                         key="target_age_group_main")
         st.session_state["target_age_group"] = target_age_group
         st.session_state["actor_age"] = int(input_age)
+
+        # 예측 버튼(쿨다운)
         predict_btn = st.button("예측 실행", key="btn_predict")
 
-    # ---- 예측 상태 복구/유지 로직 ----
+    # ---- 예측 상태 유지/저장 ----
     if predict_btn:
-        if not allow_run("last_predict_time", COOLDOWN_SEC_PRED):
+        if not _cooldown_ok("last_predict_time", SAFE_PRED_COOLDOWN_SEC):
             st.info("연속 예측 요청을 잠시 제한하고 있어요. 잠시 후 다시 시도해 주세요.")
         else:
             # 1) 사용할 모델 결정
@@ -830,10 +812,10 @@ def page_predict():
                 model_full = Pipeline([('preprocessor', preprocessor),
                                        ('model', RandomForestRegressor(n_estimators=100, random_state=SEED))])
                 st.caption("예측 모델: 기본 RandomForest (미튜닝)")
-    
+
             # 2) 전체 데이터로 재학습 (안전 실행)
             run_safely(model_full.fit, X_colab_base, y_all)
-    
+
             # 3) 현재 입력으로 예측
             user_raw = pd.DataFrame([{
                 'age': int(input_age), 'gender': input_gender, 'role': input_role, 'married': input_married,
@@ -841,11 +823,11 @@ def page_predict():
                 'genres': input_genre, 'day': input_week, 'network': input_plat, '장르구분': genre_bucket,
             }])
             st.session_state["target_age_group"] = st.session_state.get("target_age_group", derived_age_group)
-    
+
             def _build_user_base_for_pred(df_raw: pd.DataFrame) -> pd.DataFrame:
                 _user_mlb = colab_multilabel_transform(df_raw, cols=('genres','day','network'))
                 _base = pd.concat([X_colab_base.iloc[:0].copy(), _user_mlb], ignore_index=True)
-                _base = _base.drop(columns=[c for c in drop_cols if c in _base.columns], errors='ignore')
+                _base = _base.drop(columns=[c for c in ['배우명','드라마명','genres','day','network','score','start airing'] if c in _base.columns], errors='ignore')
                 for c in X_colab_base.columns:
                     if c not in _base.columns:
                         _base[c] = 0
@@ -855,11 +837,11 @@ def page_predict():
                     _base[num_cols_] = _base[num_cols_].apply(pd.to_numeric, errors="coerce")
                     _base[num_cols_] = _base[num_cols_].replace([np.inf, -np.inf], np.nan).fillna(0.0)
                 return _base
-    
+
             user_base_now = _build_user_base_for_pred(user_raw)
             pred = float(run_safely(model_full.predict, user_base_now)[0])
-    
-            # 4) 세션 저장
+
+            # 4) 세션 저장 (이후 위젯만 바꿔도 초기화되지 않음)
             st.session_state["cf_user_raw"] = user_raw.copy()
             st.session_state["cf_pred"] = float(pred)
             st.session_state["cf_model"] = model_full
@@ -875,28 +857,27 @@ def page_predict():
                 "network": list(input_plat),
                 "genre_bucket": genre_bucket,
             }
-    
-    # 버튼을 누르지 않았으면, 직전 예측 상태를 복구
+
+    # 이전 예측 상태 복구
     model_full = st.session_state.get("cf_model", None)
     user_raw   = st.session_state.get("cf_user_raw", None)
     pred       = st.session_state.get("cf_pred", None)
-    
+
     if model_full is None or user_raw is None or pred is None:
         st.info("좌측 입력을 설정한 뒤 **[예측 실행]**을 눌러주세요.")
         return
-    
+
     st.success(f"💡 예상 평점: {float(pred):.2f}")
 
     # =========================
-    # 🔎 What-if (독립 액션 Top N, 중복효과/합산/조합 금지)
+    # 🔎 What-if (독립 액션 Top N)
     # =========================
     st.markdown("---")
     st.subheader("2) 케미스코어 평점 예측")
 
     target_age_group = st.session_state.get("target_age_group")
     if not target_age_group:
-        age_group_candidates = ["10대", "20대", "30대", "40대", "50대", "60대 이상"]
-        target_age_group = age_group_candidates[1]
+        target_age_group = "20대"
         st.session_state["target_age_group"] = target_age_group
 
     def _age_group_to_decade(s: str) -> int:
@@ -923,7 +904,7 @@ def page_predict():
             st.markdown("- 편성: 주중 집중, 에피소드 퀄리티 변동 최소화")
         else:
             st.markdown("- 톤/장르: hist_war / family / society, 스토리 완성도·메시지 강화")
-            st.markdown("- 편성: 시청 루틴 반영한 안정적 슬롯")
+            st.mark론("- 편성: 시청 루틴 반영한 안정적 슬롯")
 
         if gap >= 20:
             st.info(f"배우 나이 {st.session_state.get('actor_age', 30)}세(≈{actor_decade}대) vs 타깃 {target_age_group} → **연령대 격차 큼**. 장르/편성/플랫폼을 타깃 성향에 맞춘 변경안의 우선순위를 높이세요.")
@@ -933,7 +914,7 @@ def page_predict():
     def _build_user_base(df_raw: pd.DataFrame) -> pd.DataFrame:
         _user_mlb = colab_multilabel_transform(df_raw, cols=('genres','day','network'))
         _base = pd.concat([X_colab_base.iloc[:0].copy(), _user_mlb], ignore_index=True)
-        _base = _base.drop(columns=[c for c in drop_cols if c in _base.columns], errors='ignore')
+        _base = _base.drop(columns=[c for c in ['배우명','드라마명','genres','day','network','score','start airing'] if c in _base.columns], errors='ignore')
         for c in X_colab_base.columns:
             if c not in _base.columns:
                 _base[c] = 0
@@ -957,6 +938,7 @@ def page_predict():
     day_classes     = [d for d in _classes_safe("day") if isinstance(d, str)]
     network_classes = [n for n in _classes_safe("network") if isinstance(n, str)]
 
+    # 액션 빌더
     def _add_genre(tag: str):
         def _fn(df):
             new = df.copy()
@@ -967,7 +949,7 @@ def page_predict():
             return new
         return _fn
 
-    def _set_days(days_list: list[str]):
+    def _set_days(days_list: List[str]):
         def _fn(df):
             new = df.copy()
             new.at[0, "day"] = days_list
@@ -998,8 +980,8 @@ def page_predict():
             return new
         return _fn
 
+    # 후보 생성
     actions = []
-
     g_priority_by_target = {
         "young": ["romance", "comedy", "action", "thriller"],
         "adult": ["drama", "thriller", "hist_war", "romance", "comedy"],
@@ -1034,6 +1016,7 @@ def page_predict():
     if "married" in user_raw.columns and str(user_raw.at[0, "married"]) != "미혼":
         actions.append(("married", "결혼여부: 미혼으로 변경", _set_married("미혼")))
 
+    # 액션 스코어링 (모델 재학습/초기화 없음 → 슬라이더만 바꿔도 예측 유지)
     scored = []
     for cat, desc, fn in actions:
         cand = fn(user_raw)
@@ -1047,13 +1030,11 @@ def page_predict():
         idx_best = df_scored.groupby("카테고리")["리프트"].idxmax()
         df_best_per_cat = df_scored.loc[idx_best].copy()
 
-        top_n = st.slider("추천 개수", 3, 4, 3, key="rec_topn_slider")
+        # 🔻 여기 슬라이더를 바꿔도 current_pred/state는 유지되므로 초기화 없음
+        top_n = st.slider("추천 개수", 3, 7, 5 if not SAFE_MODE else 3, key="rec_topn_slider")
         df_top = df_best_per_cat.sort_values(["리프트", "예측"], ascending=False).head(top_n).reset_index(drop=True)
 
-        st.dataframe(
-            df_top[["카테고리","변경안"]],
-            use_container_width=True
-        )
+        st.dataframe(df_top[["카테고리","변경안"]], use_container_width=True)
 
         st.markdown("#### 🔍 액션별 솔루션 요약")
         genre_reason = {
@@ -1075,7 +1056,6 @@ def page_predict():
             "토요일": "시청 가용시간↑ → 몰입/구전 효과 기대",
             "일요일": "가족·전 연령대 타깃, 다음 주 시청 예고 효과 극대화"
         }
-        
         platform_reason = {
             "ENT": "예능 중심 편성으로 대중적 화제성 확보 용이",
             "ETC_P": "기타 케이블 채널로 틈새 시청층 공략",
@@ -1087,41 +1067,28 @@ def page_predict():
             "TVN": "프라임 편성·브랜딩 시너지",
             "MBC": "오랜 드라마 제작 전통, 안정적 시청층 확보"
         }
-        
-        etc_reason = {
-            "주연": "캐릭터 공감/노출 극대화",
-            "미혼": "로맨스/청춘물 톤 결합 시 몰입도↑"
-        }
+        etc_reason = {"주연": "캐릭터 공감/노출 극대화", "미혼": "로맨스/청춘물 톤 결합 시 몰입도↑"}
 
         def _explain(desc: str) -> str:
             why = []
             m = re.search(r"장르 추가:\s*([A-Za-z_]+)", desc)
             if m:
                 g = m.group(1).lower()
-                if g in genre_reason:
-                    why.append(f"장르 효과: {genre_reason[g]}")
-                if target_decade <= 20 and g in {"romance","comedy","action"}:
-                    why.append("젊은 타깃과 톤 매칭 양호")
-                if target_decade >= 40 and g in {"hist_war","drama","thriller","society"}:
-                    why.append("성숙 타깃 선호 주제와 부합")
-            if "토요일" in desc or "saturday" in desc:
-                why.append(f"편성 효과: {day_reason['토요일']}")
-            if "금요일" in desc or "friday" in desc:
-                why.append(f"편성 효과: {day_reason['금요일']}")
-            if "수요일" in desc or "wednesday" in desc:
-                why.append(f"편성 효과: {day_reason['수요일']}")
+                if g in genre_reason: why.append(f"장르 효과: {genre_reason[g]}")
+                if target_decade <= 20 and g in {"romance","comedy","action"}: why.append("젊은 타깃과 톤 매칭 양호")
+                if target_decade >= 40 and g in {"hist_war","drama","thriller","society"}: why.append("성숙 타깃 선호 주제와 부합")
+            if "토요일" in desc or "saturday" in desc: why.append(f"편성 효과: {day_reason['토요일']}")
+            if "금요일" in desc or "friday" in desc:   why.append(f"편성 효과: {day_reason['금요일']}")
+            if "수요일" in desc or "wednesday" in desc:why.append(f"편성 효과: {day_reason['수요일']}")
             for k, v in platform_reason.items():
-                if k in desc:
-                    why.append(f"플랫폼 효과: {v}")
-            if "주연" in desc:
-                why.append(f"캐스팅 효과: {etc_reason['주연']}")
-            if "미혼" in desc:
-                why.append(f"캐릭터 톤: {etc_reason['미혼']}")
+                if k in desc: why.append(f"플랫폼 효과: {v}")
+            if "주연" in desc: why.append(f"캐스팅 효과: {etc_reason['주연']}")
+            if "미혼" in desc: why.append(f"캐릭터 톤: {etc_reason['미혼']}")
             return " / ".join(why) if why else "데이터 기반 상 상승 요인"
 
         st.markdown("**📝 상위 변경안 솔루션**")
         for _, r in df_top.iterrows():
-            st.markdown(f"- **{r['변경안']}** · {_explain(r['변경안'])}")        
+            st.markdown(f"- **{r['변경안']}** · {_explain(r['변경안'])}")
 
 # ================== 사이드바 (네비 + 설정) ==================
 NAV_ITEMS = [
@@ -1143,20 +1110,9 @@ with st.sidebar:
     st.markdown('<div class="sb-wrap">', unsafe_allow_html=True)
     st.markdown("""
     <style>
-    section[data-testid="stSidebar"] .sb-brand {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: 900;
-    }
-    section[data-testid="stSidebar"] .sb-brand .logo {
-        font-size: 35px !important;
-        line-height: 1;
-    }
-    section[data-testid="stSidebar"] .sb-brand .name {
-        font-size: 26px !important;
-        line-height: 1.2;
-    }
+    section[data-testid="stSidebar"] .sb-brand { display:flex; align-items:center; gap:8px; font-weight:900; }
+    section[data-testid="stSidebar"] .sb-brand .logo { font-size:35px !important; line-height:1; }
+    section[data-testid="stSidebar"] .sb-brand .name { font-size:26px !important; line-height:1.2; }
     </style>
     <div class="sb-brand">
         <span class="logo">💫</span>
@@ -1174,11 +1130,12 @@ with st.sidebar:
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="sb-card"><h4>모델 설정: \ntest_size=0.2, random_state=42</h4>', unsafe_allow_html=True)
-    test_size = 0.2
+    sm_text = "ON" if SAFE_MODE else "OFF"
+    st.markdown(f'<div class="sb-card"><h4>Safe Mode: {sm_text}</h4>', unsafe_allow_html=True)
+    st.caption("과도한 탐색/연타/대용량 작업을 제한해 403(Fair-use) 차단 가능성을 낮춥니다.")
     st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sb-footer">© Chemiscore • <span class="ver">v0.1</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sb-footer">© Chemiscore • <span class="ver">v0.2</span></div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ================== 라우팅 ==================

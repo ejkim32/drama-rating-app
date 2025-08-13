@@ -673,15 +673,21 @@ def page_tuning():
 
         # ✅ 세션에 저장 (버튼 밖에서 쓸 수 있게)
         st.session_state["last_cvres"] = cvres
-    # (선택) Pruned일때, ccp_alpha vs 점수 곡선
-    if model_name == "Decision Tree (Pruned)" and "param_model__ccp_alpha" in cvres.columns:
-        with st.expander("ccp_alpha vs CV score (빠른 확인)"):
-            _tmp = cvres[["param_model__ccp_alpha", "mean_test_score"]].dropna().copy()
-            _tmp = _tmp.sort_values("param_model__ccp_alpha")
-            st.line_chart(_tmp.set_index("param_model__ccp_alpha")["mean_test_score"])
+           # ✅ 세션에서 불러와서 안전하게 체크
+        cvres_cached = st.session_state.get("last_cvres", None)
+        if (
+            model_name == "Decision Tree (Pruned)"
+            and isinstance(cvres_cached, pd.DataFrame)
+            and "param_model__ccp_alpha" in cvres_cached.columns
+        ):
+            with st.expander("ccp_alpha vs CV score (빠른 확인)"):
+                _tmp = cvres_cached[["param_model__ccp_alpha", "mean_test_score"]].dropna().copy()
+                _tmp = _tmp.sort_values("param_model__ccp_alpha")
+                st.line_chart(_tmp.set_index("param_model__ccp_alpha")["mean_test_score"])
 
-    if model_name == "XGBRegressor" and not XGB_AVAILABLE:
-        st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
+
+        if model_name == "XGBRegressor" and not XGB_AVAILABLE:
+            st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
 
 def page_ml():
     st.header("머신러닝 모델링")

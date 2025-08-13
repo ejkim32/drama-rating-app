@@ -747,7 +747,7 @@ def page_predict():
     # 🔎 What-if (독립 액션 Top N, 중복효과/합산/조합 금지)
     # =========================
     st.markdown("---")
-    st.subheader("2) 케미스코어 평점 예측측")
+    st.subheader("2) 케미스코어 평점 예측")
 
     # 🔹 기존에 만든 타깃 연령대 selectbox를 재사용 (중복 위젯 생성 금지)
     target_age_group = st.session_state.get("target_age_group")
@@ -998,7 +998,7 @@ def page_predict():
                 why.append(f"캐릭터 톤: {etc_reason['미혼']}")
             return " / ".join(why) if why else "데이터 기반 상 상승 요인"
 
-        st.markdown("**📝 상위 변경안 솔루션 (독립 효과 기준)**")
+        st.markdown("**📝 상위 변경안 솔루션**")
         for _, r in df_top.iterrows():
             st.markdown(f"- **{r['변경안']}** · {_explain(r['변경안'])}")        
 

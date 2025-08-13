@@ -670,7 +670,10 @@ def page_tuning():
                                  "mean_train_score","std_train_score","params"] if c in cvres.columns]
         sorted_cvres = cvres.loc[:, safe_cols].sort_values("rank_test_score").reset_index(drop=True)
         st.dataframe(sorted_cvres, use_container_width=True)
-    # (선택) Pruned일 때, ccp_alpha vs 점수 곡선
+
+        # ✅ 세션에 저장 (버튼 밖에서 쓸 수 있게)
+        st.session_state["last_cvres"] = cvres
+    # (선택) Pruned일때, ccp_alpha vs 점수 곡선
     if model_name == "Decision Tree (Pruned)" and "param_model__ccp_alpha" in cvres.columns:
         with st.expander("ccp_alpha vs CV score (빠른 확인)"):
             _tmp = cvres[["param_model__ccp_alpha", "mean_test_score"]].dropna().copy()

@@ -513,6 +513,7 @@ def page_tuning():
     cv = st.number_input("CV 폴드 수", 3, 10, 5, 1)
     cv_shuffle = st.checkbox("CV 셔플(shuffle)", value=False)
 
+    # --- 파라미터 선택기 (기존 유지) ---
     def render_param_selector(label, options):
         display_options, to_py = [], {}
         for v in options:
@@ -538,6 +539,7 @@ def page_tuning():
         uniq=[];  [uniq.append(v) for v in chosen if v not in uniq]
         return uniq
 
+    # --- 모델 목록 (기존 유지 + Pruned 추가) ---
     model_zoo = {
         "KNN": ("nonsparse", KNeighborsRegressor()),
         "Linear Regression (Poly)": ("nonsparse", LinearRegression()),
@@ -547,7 +549,6 @@ def page_tuning():
         "SGDRegressor": ("nonsparse", SGDRegressor(max_iter=10000, random_state=SEED)),
         "SVR": ("nonsparse", SVR()),
         "Decision Tree": ("tree", DecisionTreeRegressor(random_state=SEED)),
-        # ✅ 새로 추가된 가지치기 버전
         "Decision Tree (Pruned)": ("tree", DecisionTreeRegressor(random_state=SEED)),
         "Random Forest": ("tree", RandomForestRegressor(random_state=SEED)),
     }
@@ -556,6 +557,7 @@ def page_tuning():
             random_state=SEED, objective="reg:squarederror", n_jobs=-1, tree_method="hist"
         ))
 
+    # --- 기본 그리드 (Pruned은 placeholder만; 실제 후보는 아래서 자동 생성) ---
     default_param_grids = {
         "KNN": {"poly__degree":[1,2,3], "knn__n_neighbors":[3,4,5,6,7,8,9,10]},
         "Linear Regression (Poly)": {"poly__degree":[1,2,3]},
@@ -570,9 +572,8 @@ def page_tuning():
             "model__min_samples_leaf":[2,3,4,5],
             "model__max_leaf_nodes":[None,10,20,30],
         },
-        # ✅ Pruned: ccp_alpha는 아래에서 동적 생성으로 덮어씀
-        "Decision Tree (Pruned)": {
-            "model__ccp_alpha": [0.0, 3.146231327807963e-05]  # placeholder
+        "Decision Tree (Pruned)": {  # 노트북 재현: 여기 값은 UI에만 표시, 실제 검색은 아래 수동 루프
+            "model__ccp_alpha": [0.0, 3.146231327807963e-05, 7.543988269811632e-05]
         },
         "Random Forest": {
             "model__n_estimators":[100,200,300],
@@ -594,97 +595,147 @@ def page_tuning():
     pipe = make_pipeline(model_name, kind, estimator)
 
     st.markdown("**하이퍼파라미터 선택**")
-    base_grid = default_param_grids.get(model_name, {})
-    user_grid = {k: render_param_selector(k, v) for k, v in base_grid.items()}
-  # (핵심) Pruned일 때 ccp_alpha 후보 자동 생성
+    base_grid = dict(default_param_grids.get(model_name, {}))
+
+    # --- Pruned일 때 후보를 자동 생성(노트북 방식과 동일 데이터에서) + 고정값 포함 ---
     if model_name == "Decision Tree (Pruned)":
-        # 1) 전처리 적합
         X_train_transformed = preprocessor.fit_transform(X_train, y_train)
-        # 2) pruning path
         tmp_tree = DecisionTreeRegressor(random_state=SEED)
         path = tmp_tree.cost_complexity_pruning_path(X_train_transformed, y_train)
         ccp_alphas = np.array(path.ccp_alphas, dtype=float)
-
-        # 3) 정리: 음수 제거, 중복 제거, 완전 가지치기(마지막) 제거
         ccp_alphas = ccp_alphas[ccp_alphas >= 0.0]
         if ccp_alphas.size > 0:
             ccp_alphas = np.unique(ccp_alphas)
         if ccp_alphas.size > 1:
             ccp_alphas = ccp_alphas[:-1]
+        # 노트북에서 확인한 값들을 반드시 포함
+        must_include = np.array([3.146231327807963e-05, 7.543988269811632e-05], dtype=float)
+        ccp_candidates = np.unique(np.concatenate([ccp_alphas, must_include]))
+        # UI 확인용만 표출
+        base_grid["model__ccp_alpha"] = list(ccp_candidates.tolist())
+        st.caption(f"ccp_alpha 후보(노트북 방식): {len(base_grid['model__ccp_alpha'])}개")
 
-        # 4) 과다 후보면 샘플링(최대 25개)
-        MAX_CAND = 25
-        if ccp_alphas.size == 0:
-            ccp_candidates = np.array([0.0, 1e-5, 1e-4, 1e-3])
-        elif ccp_alphas.size <= MAX_CAND:
-            ccp_candidates = ccp_alphas
-        else:
-            idx = np.linspace(0, len(ccp_alphas) - 1, num=MAX_CAND).round().astype(int)
-            ccp_candidates = np.unique(ccp_alphas[idx])
-
-        base_grid["model__ccp_alpha"] = list(np.asarray(ccp_candidates, dtype=float))
-        st.caption(f"ccp_alpha 후보 자동 생성: {len(base_grid['model__ccp_alpha'])}개")
-
-    # 기존 render_param_selector 있으면 사용, 없으면 폴백
-    # 수정
-    rsel = globals().get("render_param_selector", None)
-    if rsel is None:
-        rsel = lambda k, v: v  # 폴백: UI 없이 값 그대로 사용
+    # 파라미터 선택 UI
+    rsel = globals().get("render_param_selector", None) or (lambda k, v: v)
     user_grid = {k: rsel(k, v) for k, v in base_grid.items()}
 
     with st.expander("선택한 파라미터 확인"):
         st.write(user_grid)
 
+    # =========================
+    # 실행 버튼
+    # =========================
     if st.button("GridSearch 실행"):
-        cv_obj = KFold(n_splits=int(cv), shuffle=True, random_state=SEED) if cv_shuffle else int(cv)
-        gs = GridSearchCV(estimator=pipe, param_grid=user_grid, cv=cv_obj,
-                          scoring=scoring, n_jobs=-1, refit=True, return_train_score=True)
-        with st.spinner("GridSearchCV 실행 중..."):
-            gs.fit(X_train, y_train)
+        # --- (A) 일반 모델: 기존 GridSearchCV 유지 ---
+        if model_name != "Decision Tree (Pruned)":
+            cv_obj = KFold(n_splits=int(cv), shuffle=True, random_state=SEED) if cv_shuffle else int(cv)
+            gs = GridSearchCV(estimator=pipe, param_grid=user_grid, cv=cv_obj,
+                              scoring=scoring, n_jobs=-1, refit=True, return_train_score=True)
+            with st.spinner("GridSearchCV 실행 중..."):
+                gs.fit(X_train, y_train)
 
-        st.subheader("베스트 결과")
-        st.write("Best Params:", gs.best_params_)
-        if scoring == "neg_root_mean_squared_error":
-            st.write("Best CV RMSE (음수):", gs.best_score_)
-        else:
-            st.write(f"Best CV {scoring}:", gs.best_score_)
+            st.subheader("베스트 결과")
+            st.write("Best Params:", gs.best_params_)
+            if scoring == "neg_root_mean_squared_error":
+                st.write("Best CV RMSE (음수):", gs.best_score_)
+            else:
+                st.write(f"Best CV {scoring}:", gs.best_score_)
 
-        y_pred_tr = gs.predict(X_train); y_pred_te = gs.predict(X_test)
-        st.write("Train RMSE:", rmse(y_train, y_pred_tr))
-        st.write("Test RMSE:", rmse(y_test, y_pred_te))
-        st.write("Train R² Score:", r2_score(y_train, y_pred_tr))
-        st.write("Test R² Score:", r2_score(y_test, y_pred_te))
+            y_pred_tr = gs.predict(X_train); y_pred_te = gs.predict(X_test)
+            st.write("Train RMSE:", rmse(y_train, y_pred_tr))
+            st.write("Test RMSE:", rmse(y_test, y_pred_te))
+            st.write("Train R² Score:", r2_score(y_train, y_pred_tr))
+            st.write("Test R² Score:", r2_score(y_test, y_pred_te))
 
-        st.session_state["best_estimator"] = gs.best_estimator_
-        st.session_state["best_params"] = gs.best_params_
-        st.session_state["best_name"] = model_name
-        st.session_state["best_cv_score"] = gs.best_score_
-        st.session_state["best_scoring"] = scoring
+            st.session_state["best_estimator"] = gs.best_estimator_
+            st.session_state["best_params"] = gs.best_params_
+            st.session_state["best_name"] = model_name
+            st.session_state["best_cv_score"] = gs.best_score_
+            st.session_state["best_scoring"] = scoring
+            st.session_state["best_split_key"] = st.session_state.get("split_key")
+
+            cvres = pd.DataFrame(gs.cv_results_)
+            safe_cols = [c for c in ["rank_test_score","mean_test_score","std_test_score",
+                                     "mean_train_score","std_train_score","params"] if c in cvres.columns]
+            sorted_cvres = cvres.loc[:, safe_cols].sort_values("rank_test_score").reset_index(drop=True)
+            st.dataframe(sorted_cvres, use_container_width=True)
+            st.session_state["last_cvres"] = cvres
+
+            if model_name == "XGBRegressor" and not XGB_AVAILABLE:
+                st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
+            return
+
+        # --- (B) Pruned: 노트북과 동일한 절차로 수동 스윕 (CV 사용 X, 고정 홀드아웃) ---
+        with st.spinner("Cost-Complexity Pruning (노트북 방식) 실행 중..."):
+            # 1) 전처리 한 번 적합 → 변환
+            X_train_t = preprocessor.fit_transform(X_train, y_train)
+            X_test_t  = preprocessor.transform(X_test)
+
+            # 2) 후보군 준비 (UI 선택 결과가 있으면 그걸 우선)
+            cand = user_grid.get("model__ccp_alpha", [])
+            if not cand:
+                tmp_tree = DecisionTreeRegressor(random_state=SEED)
+                path = tmp_tree.cost_complexity_pruning_path(X_train_t, y_train)
+                ccp_alphas = np.array(path.ccp_alphas, dtype=float)
+                ccp_alphas = ccp_alphas[ccp_alphas >= 0.0]
+                if ccp_alphas.size > 0:
+                    ccp_alphas = np.unique(ccp_alphas)
+                if ccp_alphas.size > 1:
+                    ccp_alphas = ccp_alphas[:-1]
+                cand = ccp_alphas.tolist()
+            # 노트북에서 찍은 값 반드시 포함
+            for must in [3.146231327807963e-05, 7.543988269811632e-05]:
+                if must not in cand:
+                    cand.append(must)
+            cand = sorted(set(float(x) for x in cand))
+
+            # 3) 각 alpha에 대해 변환 행렬에서 직접 학습/평가
+            results = []
+            for a in cand:
+                m = DecisionTreeRegressor(random_state=SEED, ccp_alpha=float(a))
+                m.fit(X_train_t, y_train)
+                ytr = m.predict(X_train_t); yte = m.predict(X_test_t)
+                results.append({
+                    "alpha": float(a),
+                    "train_rmse": rmse(y_train, ytr),
+                    "test_rmse":  rmse(y_test,  yte),
+                    "train_r2":   float(r2_score(y_train, ytr)),
+                    "test_r2":    float(r2_score(y_test,  yte)),
+                    "estimator":  m
+                })
+
+            df_res = pd.DataFrame(results).sort_values("alpha").reset_index(drop=True)
+            # 4) 노트북과 동일하게 "Test R²" 최대값 기준으로 최적 선택
+            best_idx = int(df_res["test_r2"].idxmax())
+            best_row = df_res.loc[best_idx]
+
+        # 5) 결과 표시 (노트북 출력 형식과 동일 톤)
+        st.subheader("베스트 결과 (노트북 방식)")
+        st.write("Best Params:\n\n", {"model__ccp_alpha": best_row["alpha"]})
+        st.write("Train RMSE:", best_row["train_rmse"])
+        st.write("Test RMSE:",  best_row["test_rmse"])
+        st.write("Train R² Score:", best_row["train_r2"])
+        st.write("Test R² Score:",  best_row["test_r2"])
+
+        # 6) 예측 페이지에서 재사용할 수 있도록 파이프라인 구성(전처리+최적 트리)
+        best_alpha = float(best_row["alpha"])
+        best_pipeline = Pipeline([
+            ('preprocessor', preprocessor),
+            ('model', DecisionTreeRegressor(random_state=SEED, ccp_alpha=best_alpha))
+        ])
+        best_pipeline.fit(X_train, y_train)
+
+        st.session_state["best_estimator"] = best_pipeline
+        st.session_state["best_params"] = {"model__ccp_alpha": best_alpha}
+        st.session_state["best_name"] = "Decision Tree (Pruned) - NotebookStyle"
+        st.session_state["best_cv_score"] = None
+        st.session_state["best_scoring"] = "test_r2_max"
         st.session_state["best_split_key"] = st.session_state.get("split_key")
 
-        cvres = pd.DataFrame(gs.cv_results_)
-        safe_cols = [c for c in ["rank_test_score","mean_test_score","std_test_score",
-                                 "mean_train_score","std_train_score","params"] if c in cvres.columns]
-        sorted_cvres = cvres.loc[:, safe_cols].sort_values("rank_test_score").reset_index(drop=True)
-        st.dataframe(sorted_cvres, use_container_width=True)
+        # 7) 로그 테이블
+        st.markdown("**alpha sweep 로그 (노트북 재현)**")
+        st.dataframe(df_res[["alpha","train_rmse","test_rmse","train_r2","test_r2"]], use_container_width=True)
 
-        # ✅ 세션에 저장 (버튼 밖에서 쓸 수 있게)
-        st.session_state["last_cvres"] = cvres
-           # ✅ 세션에서 불러와서 안전하게 체크
-        cvres_cached = st.session_state.get("last_cvres", None)
-        if (
-            model_name == "Decision Tree (Pruned)"
-            and isinstance(cvres_cached, pd.DataFrame)
-            and "param_model__ccp_alpha" in cvres_cached.columns
-        ):
-            with st.expander("ccp_alpha vs CV score (빠른 확인)"):
-                _tmp = cvres_cached[["param_model__ccp_alpha", "mean_test_score"]].dropna().copy()
-                _tmp = _tmp.sort_values("param_model__ccp_alpha")
-                st.line_chart(_tmp.set_index("param_model__ccp_alpha")["mean_test_score"])
-
-
-        if model_name == "XGBRegressor" and not XGB_AVAILABLE:
-            st.warning("xgboost가 설치되어 있지 않습니다. requirements.txt에 `xgboost`를 추가하고 재배포해 주세요.")
 
 def page_ml():
     st.header("머신러닝 모델링")

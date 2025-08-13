@@ -572,10 +572,7 @@ def page_tuning():
         },
         # ✅ Pruned: ccp_alpha는 아래에서 동적 생성으로 덮어씀
         "Decision Tree (Pruned)": {
-            "model__ccp_alpha": [0.0],  # placeholder
-            "model__max_depth": [None, 10, 15, 20],   # 선택: 함께 튜닝
-            "model__min_samples_split": [2, 5, 10],
-            "model__min_samples_leaf": [1, 2, 4],
+            "model__ccp_alpha": [0.0, 3.146231327807963e-05]  # placeholder
         },
         "Random Forest": {
             "model__n_estimators":[100,200,300],
